@@ -56,7 +56,7 @@ public class HiSpeedCacheAspect {
 
     /**
      *
-     * @param nUpdateThreads 更新数据任务的线程数
+     * @param nUpdateThreads 指定数据任务的线程数
      */
     public HiSpeedCacheAspect(int nUpdateThreads) {
         executorService = Executors.newFixedThreadPool(nUpdateThreads,
