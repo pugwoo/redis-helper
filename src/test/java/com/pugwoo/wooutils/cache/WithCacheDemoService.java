@@ -4,22 +4,49 @@ import org.springframework.stereotype.Service;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * 这里测试的接口都sleep 3秒，故意制造比较慢的
+ */
 @Service
 public class WithCacheDemoService {
 
+    private AtomicInteger getSomething = new AtomicInteger(0);
+
     public String getSomething() throws Exception {
+        getSomething.incrementAndGet();
         Thread.sleep(3000);
         return "hello";
     }
 
-    @HiSpeedCache(continueFetchSecond = 60)
+    public Integer getSomethingCount() {
+        return getSomething.get();
+    }
+
+    //////////////////////////////////////
+
+    private AtomicInteger getSomethingWithCache = new AtomicInteger(0);
+
+    @HiSpeedCache(expireSecond = 1, continueFetchSecond = 10)
     public String getSomethingWithCache() throws Exception {
+        getSomethingWithCache.incrementAndGet();
         Thread.sleep(3000);
         SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         System.out.println("String getSomethingWithCache is executed @ " + df.format(new Date()));
-        return null; // 缓存null值
+        return null; // 测试缓存null值
     }
+
+    public Integer getSomethingWithCacheCount() {
+        return getSomethingWithCache.get();
+    }
+
+    public void resetSomethingWithCacheCount() {
+        getSomethingWithCache.set(0);
+    }
+
+
+    /////////////////////////////////////
 
     @HiSpeedCache(continueFetchSecond = 10, cloneReturn = true, keyScript = "args[0]")
     public Date getSomethingWithCacheCloneReturn(String name) throws Exception {
