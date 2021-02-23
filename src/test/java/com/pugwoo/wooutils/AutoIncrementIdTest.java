@@ -65,8 +65,10 @@ public class AutoIncrementIdTest {
 		}
 		System.out.println(isDup ? "数据错误，有重复" : "数据正确");
 
+		System.out.println(ids.size());
+
 		assert !isDup;
-		assert ids.size() >= THREAD * TIMES - 3; // 最多允许3个失败
+		assert ids.size() >= THREAD * TIMES - 30; // 最多允许30个失败
 
 	}
 
