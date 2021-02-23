@@ -26,13 +26,15 @@ public class AutoIncrementIdTest {
 		int THREAD = 100;
 		int TIMES = 200;
 
+		String namespace = "ORDER" + UUID.randomUUID().toString();
+
 		// redis最大连接数一般到900，受服务器打开文件数限制，需要修改系统配置: 最大连接数
 		for(int t = 0; t < THREAD; t++) {
 			Thread thread = new Thread(new Runnable() {
 				@Override
 				public void run() {
 					for(int i = 0; i < TIMES; i++) {
-						Long id = redisHelper.getAutoIncrementId("ORDER");
+						Long id = redisHelper.getAutoIncrementId(namespace);
 						//       System.out.println(id);
 						if (id != null) { // null可能是网络原因导致的，不加入
 							ids.add(id);

@@ -55,7 +55,7 @@ public class TestHiSpeedCache {
         long end = System.currentTimeMillis();
 
         System.out.println("cost:" + (end - start) + "ms");
-        assert (end - start) > 3000 && (end - start) < 3800;
+        assert (end - start) >= 3000 && (end - start) < 3800;
         assert withCacheDemoService.getSomethingWithCacheCount() == 1;
     }
 
