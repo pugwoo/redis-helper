@@ -32,7 +32,7 @@ public class TestHiSpeedCache {
         long end = System.currentTimeMillis();
 
         System.out.println("cost:" + (end - start) + "ms");
-        assert (end- start) > 9000;
+        assert (end- start) >= 9000;
         assert withCacheDemoService.getSomethingCount() == 3; // 实际也执行了3次
     }
 

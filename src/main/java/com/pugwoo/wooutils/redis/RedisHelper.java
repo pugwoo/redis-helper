@@ -238,7 +238,7 @@ public interface RedisHelper {
 	 * 
 	 * @param limitEnum
 	 * @param key
-	 * @return 返回是当前周期内第几个使用配额的，如果返回-1，表示使用配额失败
+	 * @return 返回是当前周期内第几个使用配额的，从1开始，如果返回-1，表示使用配额失败
 	 */
 	long useLimitCount(RedisLimitParam limitEnum, String key);
 	
@@ -288,7 +288,7 @@ public interface RedisHelper {
 	/**
 	 * 获得自增id，从1开始
 	 * @param namespace 必须，由使用方自定决定，用于区分不同的业务。实际redis key会加上_ID后缀
-	 * @return 没有重试，获取失败返回null，注意判断和重试
+	 * @return 获取失败(例如网络原因不通等)返回null，注意判断和重试
 	 */
 	Long getAutoIncrementId(String namespace);
 

@@ -1,4 +1,4 @@
-package com.pugwoo.wooutils.redis.benchmark;
+package com.pugwoo.wooutils.benchmark;
 
 import com.pugwoo.wooutils.fortest.ExecuteThem;
 import com.pugwoo.wooutils.redis.RedisHelper;

@@ -1,6 +1,8 @@
-package com.pugwoo.wooutils.redis;
+package com.pugwoo.wooutils;
 
 import com.pugwoo.wooutils.fortest.EqualUtils;
+import com.pugwoo.wooutils.redis.RedisHelper;
+import com.pugwoo.wooutils.redis.Student;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +18,7 @@ import java.util.*;
 public class TestRedisHelper {
 	
     @Autowired
-	private  RedisHelper redisHelper;
+	private RedisHelper redisHelper;
 
 	@Test
 	public void test0() {

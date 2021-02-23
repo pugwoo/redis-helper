@@ -1,5 +1,8 @@
-package com.pugwoo.wooutils.redis;
+package com.pugwoo.wooutils.benchmark;
 
+import com.pugwoo.wooutils.redis.RedisHelper;
+import com.pugwoo.wooutils.redis.RedisLimitParam;
+import com.pugwoo.wooutils.redis.RedisLimitPeroidEnum;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +30,7 @@ import java.util.Vector;
 public class RedisLimitBenchmark {
 
 	@Autowired
-	private  RedisHelper redisHelper;
+	private RedisHelper redisHelper;
 
 	@Test
 	public void test() throws Exception {

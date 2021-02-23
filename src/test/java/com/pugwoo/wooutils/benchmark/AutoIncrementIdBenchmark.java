@@ -1,5 +1,6 @@
-package com.pugwoo.wooutils.redis;
+package com.pugwoo.wooutils.benchmark;
 
+import com.pugwoo.wooutils.redis.RedisHelper;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class AutoIncrementIdBenchmark {
 
 	@Autowired
-	private  RedisHelper redisHelper;
+	private RedisHelper redisHelper;
 
 	@Test
 	public void test() throws Exception {
