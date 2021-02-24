@@ -115,7 +115,6 @@ public class TestHiSpeedCache {
         System.out.println("call count:" + withCacheDemoService.getSomethingWithCacheCount());
         assert qps > 100000;  // qps应该至少10万以上，正常都有100万
         assert withCacheDemoService.getSomethingWithCacheCount() <= ((int)cost/1000);
-        assert withCacheDemoService.getSomethingWithCacheCount() >= ((int)cost/1000) - 1;
     }
 
 }

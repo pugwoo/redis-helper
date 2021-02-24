@@ -33,6 +33,14 @@ public @interface HiSpeedCache {
     int continueFetchSecond() default 0;
 
     /**
+     * 高速缓存执行方法更新时，是否并行。
+     * 默认为否，此时一个缓存最多只会由一个线程执行，一定程度可以缓解当方法比较慢时，堵住整个线程池。
+     * 如果设置为true时，即使相同方法参数调用卡主了，仍然会在线程池中发起，堵住整个线程池的风险更大些。
+     * @return
+     */
+    boolean concurrentFetch() default false;
+
+    /**
      * 是否json克隆返回数据，默认false。<br>
      * 如果启动克隆，那么调用者对返回值进行修改，就不会影响缓存的值。<br>
      * 【注意】当此值为true时，请自行测试验证克隆的数据是否有问题。<br>

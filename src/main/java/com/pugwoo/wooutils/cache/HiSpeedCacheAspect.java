@@ -87,6 +87,8 @@ public class HiSpeedCacheAspect {
     private static volatile CleanExpireDataTask cleanThread = null; // 不需要多线程
     private static volatile ContinueUpdateTask continueThread = null; // 不需要多线程
 
+    private static final Map<String, Boolean> concurrentFetchControl = new ConcurrentHashMap<>(); // 控制fetch的并发执行
+
     @Around("@annotation(com.pugwoo.wooutils.cache.HiSpeedCache) execution(* *.*(..))")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
         MethodSignature signature = (MethodSignature) pjp.getSignature();
@@ -359,8 +361,27 @@ public class HiSpeedCacheAspect {
                         executorService.submit(new Runnable() {
                             @Override
                             public void run() {
+                                boolean isNeedRemoveConcurrent = false;
                                 try {
+                                    if (!continueFetchDTO.hiSpeedCache.concurrentFetch()) { // 串行执行
+                                        Boolean result = concurrentFetchControl.putIfAbsent(cacheKey, true);
+                                        if (result != null) { // 已经存在，说明在执行了
+                                            LOGGER.warn("call {} ignore because the previous call is still running", cacheKey);
+                                            return;
+                                        }
+                                    }
+                                    isNeedRemoveConcurrent = true;
+
+                                    long start = System.currentTimeMillis();
                                     Object result = continueFetchDTO.pjp.proceed();
+                                    long end = System.currentTimeMillis();
+
+                                    // 如果方法的执行时间，超过了数据的超时时间，是不太正常的
+                                    if (end - start >= continueFetchDTO.hiSpeedCache.expireSecond() * 1000) {
+                                        LOGGER.warn("call {} cost {} ms, more than expire second:{} second",
+                                                cacheKey, end - start, continueFetchDTO.hiSpeedCache.expireSecond());
+                                    }
+
                                     if(continueFetchDTO.hiSpeedCache.useRedis()) {
                                         int expireSecond = Math.max(continueFetchDTO.hiSpeedCache.expireSecond(),
                                                 continueFetchDTO.hiSpeedCache.continueFetchSecond());
@@ -379,6 +400,10 @@ public class HiSpeedCacheAspect {
                                     }
                                 } catch (Throwable e) {
                                     LOGGER.error("refreshResult execute pjp fail, key:{}", cacheKey, e);
+                                } finally {
+                                    if (isNeedRemoveConcurrent) {
+                                        concurrentFetchControl.remove(cacheKey);
+                                    }
                                 }
                             }
                         });
