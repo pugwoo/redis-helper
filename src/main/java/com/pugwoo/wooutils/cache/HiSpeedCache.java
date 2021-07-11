@@ -64,5 +64,11 @@ public @interface HiSpeedCache {
      * 【注意】当返回类型有泛型时，记得设置genericClass1或genericClass2的值，最多支持2个泛型的情况。<br>
      */
     boolean useRedis() default false;
+    
+    /**
+     * 是否缓存null值，默认是true缓存的 <br>
+     * 当此值为false时，方法返回null值，不进行缓存
+     */
+    boolean cacheNullValue() default true;
 
 }

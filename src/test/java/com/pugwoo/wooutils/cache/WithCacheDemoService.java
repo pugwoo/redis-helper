@@ -36,6 +36,15 @@ public class WithCacheDemoService {
         System.out.println("String getSomethingWithCache is executed @ " + df.format(new Date()));
         return null; // 测试缓存null值
     }
+    
+    @HiSpeedCache(expireSecond = 1, continueFetchSecond = 10, cacheNullValue = false)
+    public String getSomethingWithNotCacheNullValue() throws Exception {
+        getSomethingWithCache.incrementAndGet();
+        Thread.sleep(3000);
+        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        System.out.println("String getSomethingWithCache is executed @ " + df.format(new Date()));
+        return null; // 测试不缓存null值
+    }
 
     public Integer getSomethingWithCacheCount() {
         return getSomethingWithCache.get();

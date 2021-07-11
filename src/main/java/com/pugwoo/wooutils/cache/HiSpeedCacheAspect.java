@@ -15,7 +15,11 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
 import javax.annotation.PostConstruct;
 import java.lang.reflect.Method;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -67,11 +71,13 @@ public class HiSpeedCacheAspect {
         private volatile ProceedingJoinPoint pjp;
         private volatile HiSpeedCache hiSpeedCache;
         private volatile long expireTimestamp; // 此次调用的过时时间（毫秒时间戳）
+        private volatile boolean cacheNullValue;
 
-        private ContinueFetchDTO(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache, long expireTimestamp) {
+        private ContinueFetchDTO(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache, long expireTimestamp, boolean cacheNullValue) {
             this.pjp = pjp;
             this.hiSpeedCache = hiSpeedCache;
             this.expireTimestamp = expireTimestamp;
+            this.cacheNullValue = cacheNullValue;
         }
     }
 
@@ -169,6 +175,14 @@ public class HiSpeedCacheAspect {
 
         // 当缓存中没有时进行
         Object ret = pjp.proceed();
+        
+        boolean cacheNullValue = hiSpeedCache.cacheNullValue();
+        boolean continueFetch = fetchSecond > 0;
+        
+        // 结果为null 不缓存 没有自动刷新缓存 则直接返回
+        if (ret == null && !cacheNullValue && !continueFetch) {
+            return null;
+        }
 
         synchronized (HiSpeedCacheAspect.class) {
             int expireSecond = Math.max(hiSpeedCache.expireSecond(), hiSpeedCache.continueFetchSecond());
@@ -177,20 +191,21 @@ public class HiSpeedCacheAspect {
             if(useRedis) {
                 if(ret != null) {
                     redisHelper.setObject(cacheKey, expireSecond, ret);
-                } else {
+                } else if (cacheNullValue) {
                     redisHelper.setString(cacheKey, expireSecond, NULL_VALUE); // 缓存null值
                 }
             } else {
                 if(ret != null) {
                     dataMap.put(cacheKey, ret);
-                } else {
+                    changeKeyExpireTime(cacheKey, expireTime);
+                } else if (cacheNullValue) {
                     dataMap.put(cacheKey, NULL_VALUE); // 因为concurrentHashMap不能放null
+                    changeKeyExpireTime(cacheKey, expireTime);
                 }
-                changeKeyExpireTime(cacheKey, expireTime);
             }
 
-            if (fetchSecond > 0) {
-                ContinueFetchDTO continueFetchDTO = new ContinueFetchDTO(pjp, hiSpeedCache, expireTime);
+            if (continueFetch) {
+                ContinueFetchDTO continueFetchDTO = new ContinueFetchDTO(pjp, hiSpeedCache, expireTime, cacheNullValue);
                 keyContinueFetchMap.put(cacheKey, continueFetchDTO);
                 long nextFetchTime = Math.min(hiSpeedCache.expireSecond(), hiSpeedCache.continueFetchSecond())
                         * 1000 + System.currentTimeMillis();
@@ -382,6 +397,11 @@ public class HiSpeedCacheAspect {
                                                 cacheKey, end - start, continueFetchDTO.hiSpeedCache.expireSecond());
                                     }
 
+                                    // 结果为null且不缓存null值
+                                    if (result == null && !continueFetchDTO.cacheNullValue) {
+                                        return;
+                                    }
+                                    
                                     if(continueFetchDTO.hiSpeedCache.useRedis()) {
                                         int expireSecond = Math.max(continueFetchDTO.hiSpeedCache.expireSecond(),
                                                 continueFetchDTO.hiSpeedCache.continueFetchSecond());
