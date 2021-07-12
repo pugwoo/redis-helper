@@ -8,10 +8,10 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.mvel2.MVEL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
-import javax.annotation.PostConstruct;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @EnableAspectJAutoProxy
 @Aspect
-public class RedisSyncAspect {
+public class RedisSyncAspect implements InitializingBean {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedisSyncAspect.class);
 
@@ -38,8 +38,8 @@ public class RedisSyncAspect {
 
 	private static volatile HeartbeatRenewalTask heartbeatRenewalTask = null; // 不需要多线程
 
-	@PostConstruct
-	private void init() {
+	@Override
+	public void afterPropertiesSet() {
 		if(redisHelper == null) {
 			LOGGER.error("redisHelper is null, RedisSyncAspect will pass through all method call");
 		} else {
