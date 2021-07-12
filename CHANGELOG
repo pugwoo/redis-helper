@@ -1,4 +1,8 @@
+2021年7月12日
+v1.0.1
 - [add] HiSpeedCache添加cacheNullValue属性，支持配置返回null值时不缓存
+- [upgrade] 升级jedis到3.6.1版本
+- [upgrade] 移除javax.annotation.PostConstruct，使用InitializingBean代替，适应jdk11+的版本
 
 v1.0.0
 - [init] 初始代码来自于woo-utils 0.9.2版本https://github.com/pugwoo/woo-utils
