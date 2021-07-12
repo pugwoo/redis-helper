@@ -23,8 +23,8 @@ public class AutoIncrementIdTest {
 		long start = System.currentTimeMillis();
 		List<Thread> threads = new ArrayList<Thread>();
 
-		int THREAD = 100;
-		int TIMES = 200;
+		int THREAD = 20;
+		int TIMES = 2000;
 
 		String namespace = "ORDER" + UUID.randomUUID().toString();
 
