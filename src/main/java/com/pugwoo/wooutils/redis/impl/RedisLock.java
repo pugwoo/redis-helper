@@ -1,9 +1,8 @@
 package com.pugwoo.wooutils.redis.impl;
 
+import com.pugwoo.wooutils.redis.RedisHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.pugwoo.wooutils.redis.RedisHelper;
 
 import java.util.UUID;
 
@@ -27,7 +26,7 @@ public class RedisLock {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedisLock.class);
 	
-	private static String getKey(String namespace, String key) {
+	public static String getKey(String namespace, String key) {
 		return namespace + ":" + key;
 	}
 
