@@ -23,37 +23,14 @@ public class ThrowIfNotGetLockTestService {
     }
     
     /** 获取不到锁抛异常 - 异常提供了无参数构造器 */
-    @Synchronized(namespace = "throwIfNotGetLock", expireSecond = 2, waitLockMillisecond = 0,
-            throwExceptionIfNotGetLock = HasNonparametricConstructorException.class)
-    public void throwIfNotGetLock_hasNonparametricConstructor(long sleepMs) {
+    @Synchronized(namespace = "throwIfNotGetLock", expireSecond = 2, waitLockMillisecond = 500,
+            throwExceptionIfNotGetLock = true)
+    public void throwIfNotGetLock(long sleepMs) {
         if (sleepMs > 0) {
             try {
                 Thread.sleep(sleepMs);
             } catch (InterruptedException ignore) {
             }
-        }
-    }
-    
-    /** 获取不到锁抛异常 - 异常未提供无参数构造器 */
-    @Synchronized(namespace = "throwIfNotGetLock", expireSecond = 2, waitLockMillisecond = 0,
-            throwExceptionIfNotGetLock = HasNotNonparametricConstructorException.class)
-    public void throwIfNotGetLock_hasNotNonparametricConstructor(long sleepMs) {
-        if (sleepMs > 0) {
-            try {
-                Thread.sleep(sleepMs);
-            } catch (InterruptedException ignore) {
-            }
-        }
-    }
-    
-    public static class HasNonparametricConstructorException extends RuntimeException {
-        private HasNonparametricConstructorException() {}
-        public HasNonparametricConstructorException(String ignore, String ignore2) {
-        }
-    }
-    
-    public static class HasNotNonparametricConstructorException extends RuntimeException {
-        public HasNotNonparametricConstructorException(String ignore, String ignore2) {
         }
     }
 }

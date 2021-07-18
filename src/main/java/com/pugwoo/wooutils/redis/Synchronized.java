@@ -63,15 +63,9 @@ public @interface Synchronized {
 	boolean logDebug() default false;
 	
 	/**
-	 * 如果指定了该值，那么当获取不到锁时，抛出该异常
-	 * 异常信息为 "获取不到分布式锁：${lockKey}"
-	 * 如果调用方提供的异常未提供无参数构造器，将会导致实例化异常，
-	 * 或者在设置异常信息时，出现不明原因的异常，
-	 * 此时将使用{@link NotGetLockException}代替
+	 * 是否在获取不到分布式锁时抛出异常 <br>
+	 * 默认不抛出异常 <br>
+	 * 如果设置为true，则当获取不到锁时，抛出 {@link NotGetLockException}
 	 */
-	Class<? extends RuntimeException> throwExceptionIfNotGetLock() default NotThrowIfNotGetLockException.class;
-	
-	/** {@link #throwExceptionIfNotGetLock()} 的默认值，表示未抢到锁不抛异常 */
-	class NotThrowIfNotGetLockException extends RuntimeException {
-	}
+	boolean throwExceptionIfNotGetLock() default false;
 }

@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 
 @ContextConfiguration(locations = {"classpath:applicationContext-context.xml"})
 @RunWith(SpringJUnit4ClassRunner.class)
@@ -147,19 +146,10 @@ public class TestSync {
 	}
 	
 	@Test
-	public void testThrowIfNotGetLock_hasNonparametricConstructor() throws InterruptedException {
-		testThrowIfNotGetLock(true, sleepMs -> throwIfNotGetLockTestService.throwIfNotGetLock_hasNonparametricConstructor(sleepMs));
-	}
-	
-	@Test
-	public void testThrowIfNotGetLock_hasNotNonparametricConstructor() throws InterruptedException {
-		testThrowIfNotGetLock(false, sleepMs -> throwIfNotGetLockTestService.throwIfNotGetLock_hasNotNonparametricConstructor(sleepMs));
-	}
-	
-	private void testThrowIfNotGetLock(boolean hasNonparametricConstructor, Consumer<Long> consumer) throws InterruptedException {
+	public void testThrowIfNotGetLock() throws InterruptedException {
 		// 先跑一下，其初次执行大约占了两秒时间，导致后面校验时的时间不对
 		// redis操作加锁的时候会生成随机的value
-		UUID.randomUUID();
+		UUID ignore = UUID.randomUUID();
 		
 		List<Thread> thread = new ArrayList<>();
 		AtomicInteger haveRunCount = new AtomicInteger();
@@ -172,7 +162,7 @@ public class TestSync {
 			Thread t = new Thread(() -> {
 				try {
 					while (true) {
-						consumer.accept(1000L);
+						throwIfNotGetLockTestService.throwIfNotGetLock(1000L);
 						System.out.println(DTF.format(LocalDateTime.now()) + " 线程" + a +
 								"执行结果详情: 是否执行了方法:" + RedisSyncContext.getHaveRun());
 						if(RedisSyncContext.getHaveRun()) {
@@ -187,6 +177,10 @@ public class TestSync {
 							"执行结果详情: 是否执行了方法:" + RedisSyncContext.getHaveRun());
 					haveNotRunExceptionCount.incrementAndGet();
 					if (e.getClass() == NotGetLockException.class) {
+						NotGetLockException notGetLockException = (NotGetLockException) e;
+						System.out.println("targetMethod -> " + notGetLockException.getTargetMethod());
+						System.out.println("   namespace -> " + notGetLockException.getNamespace());
+						System.out.println("         key -> " + notGetLockException.getKey());
 						haveNotRunNotThrowIfNotGetLockExceptionCount.incrementAndGet();
 					}
 					e.printStackTrace();
@@ -209,10 +203,7 @@ public class TestSync {
 		assert haveRunCount.get() == 1;    // 总共执行1
 		assert haveNotRunCount.get() == 0;  // 其他都失败了 异常了
 		assert haveNotRunExceptionCount.get() == 2; // 2个失败了 抛异常了
-		// 测试的抛出的异常是否有无参构造器，
-		// 有无参构造器的会创建成功，不会使用到默认的，数量为0
-		// 没有无参构造器的会创建成功，会使用到默认的，数量为2
-		assert haveNotRunNotThrowIfNotGetLockExceptionCount.get() == (hasNonparametricConstructor ? 0 : 2);
+		assert haveNotRunNotThrowIfNotGetLockExceptionCount.get() ==  2;  // 都抛出了NotGetLockException
 		assert cost >= 1000;
 		assert cost <= 2000;
 	}

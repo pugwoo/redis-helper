@@ -1,5 +1,6 @@
 v1.0.2
 - [add] Synchronized注解提供参数throwExceptionIfNotGetLock，当获取不到锁时，抛出该异常，如果提供的异常实例化失败，将以默认的NotGetLockException代替
+- [modify] Synchronized注解参数throwExceptionIfNotGetLock更改为boolean，当获取不到锁时，抛出NotGetLockException
 
 2021年7月12日
 v1.0.1

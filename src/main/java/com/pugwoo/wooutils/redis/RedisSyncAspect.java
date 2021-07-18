@@ -1,7 +1,6 @@
 package com.pugwoo.wooutils.redis;
 
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
-import com.pugwoo.wooutils.redis.impl.RedisLock;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -13,9 +12,6 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -157,7 +153,7 @@ public class RedisSyncAspect implements InitializingBean {
 					LOGGER.info("namespace:{},key:{}, give up getting a lock,threadName:{}", namespace, key,
 							Thread.currentThread().getName());
 				}
-				mayThrowExceptionIfNotGetLock(sync, namespace, key);
+				mayThrowExceptionIfNotGetLock(sync, targetMethod, namespace, key);
 				return null;
 			}
 			long totalWait = System.currentTimeMillis() - start;
@@ -166,7 +162,7 @@ public class RedisSyncAspect implements InitializingBean {
 				if(sync.logDebug()) {
 					LOGGER.info("namespace:{},key:{}, give up getting a lock,total wait:{}ms,threadName:{}", namespace, key, totalWait, Thread.currentThread().getName());
 				}
-				mayThrowExceptionIfNotGetLock(sync, namespace, key);
+				mayThrowExceptionIfNotGetLock(sync, targetMethod, namespace, key);
 				return null;
 			}
 			if(waitLockMillisecond - totalWait < b) {
@@ -182,45 +178,17 @@ public class RedisSyncAspect implements InitializingBean {
     }
 	
 	/**
-	 * 如果sync.throwExceptionIfNotGetLock()不是默认的{@link Synchronized.NotThrowIfNotGetLockException },
-	 * 则抛出指定的RuntimeException，<br>
-	 * 信息为: "获取不到分布式锁：${lockKey}"  <br>
-	 * 如果指定的异常实例化失败，则抛出默认的 {@link NotGetLockException}
+	 * 如果sync.throwExceptionIfNotGetLock()为true,
+	 * 则抛出指定的 {@link NotGetLockException} <br>
 	 * @param sync 注解的实例
-	 *             如果throwExceptionIfNotGetLock()不是默认的{@link Synchronized.NotThrowIfNotGetLockException },
-	 *             则抛出指定的RuntimeException，信息为: "获取不到分布式锁：${lockKey}"
-	 * @param namespace 锁的命名空间，异常的信息lock元素之一
-	 * @param key 锁的名称，异常的信息lock元素之一
+	 * @param targetMethod 要执行的方法
+	 * @param namespace 锁的命名空间，异常信息之一
+	 * @param key 锁的名称，异常信息之一
 	 */
-	private void mayThrowExceptionIfNotGetLock(Synchronized sync, String namespace, String key) {
-		Class<? extends RuntimeException> clazz = sync.throwExceptionIfNotGetLock();
-		if (clazz == Synchronized.NotThrowIfNotGetLockException.class) {
-			return;
-		}
-		String message = "获取不到分布式锁：" + RedisLock.getKey(namespace, key);
-		try {
-			Constructor<? extends RuntimeException> constructor = clazz.getDeclaredConstructor();
-			if (!constructor.isAccessible()) {
-				constructor.setAccessible(true);
-			}
-			RuntimeException exception = constructor.newInstance();
-			Field detailMessage = Throwable.class.getDeclaredField("detailMessage");
-			detailMessage.setAccessible(true);
-			detailMessage.set(exception, message);
-			throw exception;
-		} catch (NoSuchMethodException ignore) {
-			// 调用方指定的异常未提供无参构造器
-			LOGGER.warn("namespace:{},key:{}, NOT get a lock, need throw {}, but not support nonparametric constructor, threadName:{}",
-					namespace, key, clazz.getName(), Thread.currentThread().getName());
-		} catch (NoSuchFieldException ignore) {
-			// Throwable.class 没有 detailMessage 字段，直接忽略，除非源码改了，不然不可能
-			LOGGER.warn("java.lang.Throwable has not field detailMessage, threadName:{}", Thread.currentThread().getName());
-		} catch (InstantiationException | InvocationTargetException | IllegalAccessException e) {
-			// 实例化异常 或 设置异常信息错误
-			LOGGER.warn("namespace:{},key:{}, NOT get a lock, need throw {}, but create instance failed cause by: {}: {} , threadName:{}",
-					namespace, key, clazz.getName(), e.getClass().getName(), e.getMessage(), Thread.currentThread().getName());
-		}
-		throw new NotGetLockException(message);
+	private void mayThrowExceptionIfNotGetLock(Synchronized sync, Method targetMethod, String namespace, String key) {
+		boolean throwExceptionIfNotGetLock = sync.throwExceptionIfNotGetLock();
+		if (!throwExceptionIfNotGetLock) { return; }
+		throw new NotGetLockException(targetMethod, namespace, key);
 	}
 	
 	public void setRedisHelper(RedisHelper redisHelper) {

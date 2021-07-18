@@ -1,14 +1,42 @@
 package com.pugwoo.wooutils.redis;
 
+import com.pugwoo.wooutils.redis.impl.RedisLock;
+
+import java.lang.reflect.Method;
+
 /**
  * @author sapluk <br>
- * 如果设置的 {@link Synchronized#throwExceptionIfNotGetLock()}
- * 未提供无参数构造器，或者出现设置异常信息时出错，
- * 都将使用该异常代替
+ * 如果获取不到分布式锁，且 {@link Synchronized#throwExceptionIfNotGetLock()} 设置为true
+ * 则抛出该异常
  */
 public class NotGetLockException extends RuntimeException {
     
-    public NotGetLockException(String message) {
-        super(message);
+    /** 执行的目标方法 */
+    private Method targetMethod;
+    
+    /** 分布式锁命名空间 {@link Synchronized#namespace()} */
+    private String namespace;
+    
+    /** 分布式锁的key，由 {@link Synchronized#keyScript()} 运算成功得出 */
+    private String key;
+    
+    
+    public NotGetLockException(Method targetMethod, String namespace, String key) {
+        super("获取不到分布式锁: " + RedisLock.getKey(namespace, key));
+        this.targetMethod = targetMethod;
+        this.namespace = namespace;
+        this.key = key;
+    }
+    
+    public Method getTargetMethod() {
+        return targetMethod;
+    }
+    
+    public String getNamespace() {
+        return namespace;
+    }
+    
+    public String getKey() {
+        return key;
     }
 }
