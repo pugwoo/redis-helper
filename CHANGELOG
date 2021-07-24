@@ -1,3 +1,4 @@
+2021年7月24日
 v1.0.2
 - [add] Synchronized注解提供参数throwExceptionIfNotGetLock，当获取不到锁时，抛出NotGetLockException异常
 
