@@ -16,7 +16,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @ContextConfiguration(locations = {"classpath:applicationContext-context.xml"})
@@ -103,8 +102,7 @@ public class TestSync {
 	public void testNotThrowIfNotGetLock() throws InterruptedException {
 		// 先跑一下，其初次执行大约占了两秒时间，导致后面校验时的时间不对
 		// redis操作加锁的时候会生成随机的value
-		UUID.randomUUID();
-		
+
 		List<Thread> thread = new ArrayList<>();
 		AtomicInteger haveRunCount = new AtomicInteger();
 		AtomicInteger haveNotRunCount = new AtomicInteger();
@@ -149,8 +147,7 @@ public class TestSync {
 	public void testThrowIfNotGetLock() throws InterruptedException {
 		// 先跑一下，其初次执行大约占了两秒时间，导致后面校验时的时间不对
 		// redis操作加锁的时候会生成随机的value
-		UUID ignore = UUID.randomUUID();
-		
+
 		List<Thread> thread = new ArrayList<>();
 		AtomicInteger haveRunCount = new AtomicInteger();
 		AtomicInteger haveNotRunCount = new AtomicInteger();
