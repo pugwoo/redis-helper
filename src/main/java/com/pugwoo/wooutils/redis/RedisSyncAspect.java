@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
 import java.lang.reflect.Method;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -50,8 +49,6 @@ public class RedisSyncAspect implements InitializingBean {
 			LOGGER.info("@Synchronized init success.");
 		}
 	}
-	
-	public static final DateTimeFormatter DTF = DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss.SSS");
 
 	@Around("@annotation(com.pugwoo.wooutils.redis.Synchronized) execution(* *.*(..))")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
@@ -186,9 +183,9 @@ public class RedisSyncAspect implements InitializingBean {
 	 * @param key 锁的名称，异常信息之一
 	 */
 	private void mayThrowExceptionIfNotGetLock(Synchronized sync, Method targetMethod, String namespace, String key) {
-		boolean throwExceptionIfNotGetLock = sync.throwExceptionIfNotGetLock();
-		if (!throwExceptionIfNotGetLock) { return; }
-		throw new NotGetLockException(targetMethod, namespace, key);
+		if (sync.throwExceptionIfNotGetLock()) {
+			throw new NotGetLockException(targetMethod, namespace, key);
+		}
 	}
 	
 	public void setRedisHelper(RedisHelper redisHelper) {
