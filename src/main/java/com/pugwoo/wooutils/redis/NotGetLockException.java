@@ -22,7 +22,7 @@ public class NotGetLockException extends RuntimeException {
     
     
     public NotGetLockException(Method targetMethod, String namespace, String key) {
-        super("获取不到分布式锁: " + RedisLock.getKey(namespace, key));
+        super("Fail to require distributed lock, key:" + RedisLock.getKey(namespace, key));
         this.targetMethod = targetMethod;
         this.namespace = namespace;
         this.key = key;
