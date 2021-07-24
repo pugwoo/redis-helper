@@ -70,5 +70,12 @@ public @interface HiSpeedCache {
      * 当此值为false时，方法返回null值，不进行缓存
      */
     boolean cacheNullValue() default true;
+    
+    /**
+     * 当高速缓存使用了redis时，该参数有效 <br>
+     *   默认每次都是去redis拿缓存数据 <br>
+     *   当该参数大于0时，会将redis的缓存数据在本地缓存设置的时间，相当于二级缓存 <br>
+     */
+    int cacheRedisDataMillisecond() default 0;
 
 }

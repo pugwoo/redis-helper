@@ -60,6 +60,46 @@ public class TestHiSpeedCache {
         assert withCacheDemoService.getSomethingWithCacheCount() == 1;  // 目标方法实际只执行了一次
     }
     
+    /** 缓存null值 */
+    @Test
+    public void testWithCache2() throws Exception {
+        Thread.sleep(15000); // 等待缓存过期，缓存的continueFetchSecond是10秒
+        
+        withCacheDemoService.resetSomethingWithCacheCount();
+        long start = System.currentTimeMillis();
+        
+        String str;
+        // 100ms * 100 = 10s
+        // 第一次调用sleep了3s
+        for (int i = 0; i < 100; i++) {
+            str = withCacheDemoService.getSomethingWithCache2();
+            // System.out.println(str + " " + new Date());
+            assert str == null;
+            Thread.sleep(100);
+        }
+        Thread.sleep(20000);
+        long end = System.currentTimeMillis();
+        
+        // 共计 10s + 3s +20s = 33s
+        System.out.println("cost:" + (end - start) + "ms");
+        assert (end - start) >= 33000 && (end - start) < 34000;
+        
+        // String getSomethingWithCache is start    @ 2021-07-25 01:04:15
+        // String getSomethingWithCache is executed @ 2021-07-25 01:04:18  第一次调用
+        // String getSomethingWithCache is start    @ 2021-07-25 01:04:22
+        // String getSomethingWithCache is executed @ 2021-07-25 01:04:25  第一次fetch
+        // String getSomethingWithCache is start    @ 2021-07-25 01:04:26
+        // String getSomethingWithCache is executed @ 2021-07-25 01:04:29  第二次fetch
+        // String getSomethingWithCache is start    @ 2021-07-25 01:04:30
+        // String getSomethingWithCache is executed @ 2021-07-25 01:04:33  第三次fetch
+        // String getSomethingWithCache is start    @ 2021-07-25 01:04:34
+        // String getSomethingWithCache is executed @ 2021-07-25 01:04:37  第四次fetch
+        // String getSomethingWithCache is start    @ 2021-07-25 01:04:38
+        // String getSomethingWithCache is executed @ 2021-07-25 01:04:41  第五次fetch
+        System.out.println(withCacheDemoService.getSomethingWithCacheCount());
+        assert withCacheDemoService.getSomethingWithCacheCount() == 6;
+    }
+    
     /** 不缓存null值 */
     @Test
     public void testWithNotCacheNullValue() throws Exception {

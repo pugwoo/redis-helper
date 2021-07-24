@@ -37,6 +37,16 @@ public class WithCacheDemoService {
         return null; // 测试缓存null值
     }
     
+    @HiSpeedCache(expireSecond = 4, continueFetchSecond = 10, useRedis = true, cacheRedisDataMillisecond = 300)
+    public String getSomethingWithCache2() throws Exception {
+        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        System.out.println("String getSomethingWithCache is start    @ " + df.format(new Date()));
+        getSomethingWithCache.incrementAndGet();
+        Thread.sleep(3000);
+        System.out.println("String getSomethingWithCache is executed @ " + df.format(new Date()));
+        return null;
+    }
+    
     @HiSpeedCache(expireSecond = 1, continueFetchSecond = 10, cacheNullValue = false)
     public String getSomethingWithNotCacheNullValue() throws Exception {
         getSomethingWithCache.incrementAndGet();

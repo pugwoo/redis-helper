@@ -142,26 +142,48 @@ public class HiSpeedCacheAspect {
                 continueFetchDTO.expireTimestamp = fetchSecond * 1000 + System.currentTimeMillis();
             }
         }
-
+        
+        // 缓存到本地的配置
+        int cacheRedisDataMillisecond = hiSpeedCache.cacheRedisDataMillisecond();
+        boolean cacheRedisData = cacheRedisDataMillisecond > 0;
+        
         // 查看数据是否有命中，有则直接返回
         if(useRedis) {
+            
+            // 如果设置了缓存redis数据到本地，则尝试获取本地缓存数据
+            if (cacheRedisData) {
+                Object cacheData = getCacheData(cacheKey);
+                if (cacheData != null) {
+                    return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData);
+                }
+            }
+            
             String value = redisHelper.getString(cacheKey);
             if(value != null) { // == null则缓存没命中，应该走下面调用逻辑
                 if(value.equals(NULL_VALUE)) {
+                    if (cacheRedisData) { // 缓存到本地
+                        putCacheData(cacheKey, NULL_VALUE, cacheRedisDataMillisecond + System.currentTimeMillis());
+                    }
                     return null; // 命中null值缓存
                 }
+                
                 Class<?> returnClazz = targetMethod.getReturnType();
                 Class<?> genericClass1 = hiSpeedCache.genericClass1();
                 Class<?> genericClass2 = hiSpeedCache.genericClass2();
-
+    
+                Object result;
                 IRedisObjectConverter redisObjectConverter = redisHelper.getRedisObjectConverter();
                 if(genericClass1 == Void.class && genericClass2 == Void.class) {
-                    return redisObjectConverter.convertToObject(value, returnClazz);
+                    result = redisObjectConverter.convertToObject(value, returnClazz);
                 } else if (genericClass1 != Void.class && genericClass2 == Void.class) {
-                    return redisObjectConverter.convertToObject(value, returnClazz, genericClass1);
+                    result = redisObjectConverter.convertToObject(value, returnClazz, genericClass1);
                 } else {
-                    return redisObjectConverter.convertToObject(value, returnClazz, genericClass1, genericClass2);
+                    result = redisObjectConverter.convertToObject(value, returnClazz, genericClass1, genericClass2);
                 }
+                if (cacheRedisData) { // 缓存到本地
+                    putCacheData(cacheKey, result, cacheRedisDataMillisecond + System.currentTimeMillis());
+                }
+                return result;
             }
         } else {
             if (dataMap.containsKey(cacheKey)) {
@@ -191,8 +213,14 @@ public class HiSpeedCacheAspect {
             if(useRedis) {
                 if(ret != null) {
                     redisHelper.setObject(cacheKey, expireSecond, ret);
+                    if (cacheRedisData) {
+                        putCacheData(cacheKey, ret, cacheRedisDataMillisecond + System.currentTimeMillis());
+                    }
                 } else if (cacheNullValue) {
                     redisHelper.setString(cacheKey, expireSecond, NULL_VALUE); // 缓存null值
+                    if (cacheRedisData) {
+                        putCacheData(cacheKey, NULL_VALUE, cacheRedisDataMillisecond + System.currentTimeMillis());
+                    }
                 }
             } else {
                 if(ret != null) {
@@ -238,6 +266,34 @@ public class HiSpeedCacheAspect {
         return processClone(hiSpeedCache, ret);
     }
 
+    /**
+     * 获取缓存数据 会进行过期校验
+     * @param cacheKey 缓存key
+     * @return 缓存的值
+     */
+    private Object getCacheData(String cacheKey) {
+        Object data = dataMap.get(cacheKey);
+        if (data == null) { return null; }
+        
+        // 如果超过过期时间，视为数据无效了; 其数据交由清理线程处理
+        Long expire = keyExpireMap.get(cacheKey);
+        if (expire == null || expire <= System.currentTimeMillis()) {
+            return null;
+        }
+        return data;
+    }
+    
+    /**
+     * 缓存数据
+     * @param cacheKey 缓存的key
+     * @param cacheData 缓存的数据
+     * @param expireTimestamp 过期时间戳 毫秒
+     */
+    private void putCacheData(String cacheKey, Object cacheData, long expireTimestamp) {
+        dataMap.put(cacheKey, cacheData);
+        changeKeyExpireTime(cacheKey, expireTimestamp);
+    }
+    
     /*处理结果值克隆的问题*/
     private Object processClone(HiSpeedCache hiSpeedCache, Object data) {
         if(data == null) {
