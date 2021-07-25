@@ -183,7 +183,7 @@ public class HiSpeedCacheAspect {
                 if (cacheRedisData) { // 缓存到本地
                     putCacheData(cacheKey, result, cacheRedisDataMillisecond + System.currentTimeMillis());
                 }
-                return result;
+                return result; // 因为这个值是新构造的，也没有缓存，所以不需要processClone
             }
         } else {
             if (dataMap.containsKey(cacheKey)) {
