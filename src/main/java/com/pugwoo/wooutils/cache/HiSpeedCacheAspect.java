@@ -570,7 +570,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
         for(Class<?> clazz : parameterTypes) {
             sb.append(clazz.getName()).append(",");
         }
-        return sb.toString().substring(0, sb.length() - 1);
+        return sb.substring(0, sb.length() - 1);
     }
 
     private static class MyThreadFactory implements ThreadFactory {
