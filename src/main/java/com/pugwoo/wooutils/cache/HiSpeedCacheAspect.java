@@ -123,19 +123,13 @@ public class HiSpeedCacheAspect implements InitializingBean {
                     return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData);
                 }
             }
-            
+
             String value = redisHelper.getString(cacheKey);
             if(value != null) { // == null则缓存没命中，应该走下面调用逻辑
-                if(value.equals(NULL_VALUE)) {
-                    if (cacheRedisData) { // 缓存到本地
-                        putCacheData(cacheKey, NULL_VALUE, cacheRedisDataMillisecond + System.currentTimeMillis());
-                    }
-                    return null; // 命中null值缓存
-                }
-
-                Object result = parseJson(value, targetMethod, hiSpeedCache);
+                Object result = NULL_VALUE.equals(value) ? null : parseJson(value, targetMethod, hiSpeedCache);
                 if (cacheRedisData) { // 缓存到本地
-                    putCacheData(cacheKey, result, cacheRedisDataMillisecond + System.currentTimeMillis());
+                    putCacheData(cacheKey, result == null ? NULL_VALUE : result,
+                            cacheRedisDataMillisecond + System.currentTimeMillis());
                 }
                 return result; // 因为这个值是新构造的，也没有缓存，所以不需要processClone
             }
