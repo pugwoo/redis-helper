@@ -192,6 +192,13 @@ public class HiSpeedCacheAspect implements InitializingBean {
             }
         }
 
+        startThread(hiSpeedCache);
+
+        return processClone(hiSpeedCache, ret);
+    }
+
+    /**启用清理线程和更新线程*/
+    private void startThread(HiSpeedCache hiSpeedCache) {
         if (cleanThread == null) {
             synchronized (CleanExpireDataTask.class) {
                 if (cleanThread == null) {
@@ -213,8 +220,6 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 }
             }
         }
-
-        return processClone(hiSpeedCache, ret);
     }
 
     /**续期持续fetch的到期时间*/
