@@ -108,14 +108,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
         }
         String cacheKey = generateCacheKey(pjp, key);
 
-        int fetchSecond = hiSpeedCache.continueFetchSecond();
-        if(fetchSecond > 0) { // 持续更新时，每次接口的访问都会延长持续获取的时长(如果还没超时的话)
-            ContinueFetchDTO continueFetchDTO = keyContinueFetchMap.get(cacheKey);
-            if(continueFetchDTO != null) {
-                continueFetchDTO.pjp = pjp;
-                continueFetchDTO.expireTimestamp = fetchSecond * 1000 + System.currentTimeMillis();
-            }
-        }
+        renewFetchExpire(pjp, hiSpeedCache, cacheKey);
         
         // 缓存到本地的配置
         int cacheRedisDataMillisecond = hiSpeedCache.cacheRedisDataMillisecond();
@@ -170,7 +163,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
         Object ret = pjp.proceed();
         
         boolean cacheNullValue = hiSpeedCache.cacheNullValue();
-        boolean continueFetch = fetchSecond > 0;
+        boolean continueFetch = hiSpeedCache.continueFetchSecond() > 0;
         
         // 结果为null 不缓存 没有自动刷新缓存 则直接返回
         if (ret == null && !cacheNullValue && !continueFetch) {
@@ -222,7 +215,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
             }
         }
 
-        if (fetchSecond != 0) {
+        if (hiSpeedCache.continueFetchSecond() != 0) {
             if (continueThread == null) {
                 synchronized (ContinueUpdateTask.class) {
                     if (continueThread == null) {
@@ -235,6 +228,18 @@ public class HiSpeedCacheAspect implements InitializingBean {
         }
 
         return processClone(hiSpeedCache, ret);
+    }
+
+    /**续期持续fetch的到期时间*/
+    private void renewFetchExpire(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache, String cacheKey) {
+        int fetchSecond = hiSpeedCache.continueFetchSecond();
+        if(fetchSecond > 0) { // 持续更新时，每次接口的访问都会延长持续获取的时长(如果还没超时的话)
+            ContinueFetchDTO continueFetchDTO = keyContinueFetchMap.get(cacheKey);
+            if(continueFetchDTO != null) {
+                continueFetchDTO.pjp = pjp;
+                continueFetchDTO.expireTimestamp = fetchSecond * 1000 + System.currentTimeMillis();
+            }
+        }
     }
 
     /**生成缓存最终的key*/
