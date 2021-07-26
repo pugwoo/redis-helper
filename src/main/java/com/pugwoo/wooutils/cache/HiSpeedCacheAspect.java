@@ -575,9 +575,9 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     private static class MyThreadFactory implements ThreadFactory {
 
-        private AtomicInteger count = new AtomicInteger(1);
+        private final AtomicInteger count = new AtomicInteger(1);
 
-        private String threadNamePrefix;
+        private final String threadNamePrefix;
 
         public MyThreadFactory(String threadNamePrefix) {
             this.threadNamePrefix = threadNamePrefix;
