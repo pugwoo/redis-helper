@@ -95,9 +95,6 @@ public class HiSpeedCacheAspect implements InitializingBean {
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
         MethodSignature signature = (MethodSignature) pjp.getSignature();
         Method targetMethod = signature.getMethod();
-        String clazzName = signature.getDeclaringType().getName();
-        String methodName = targetMethod.getName();
-
         HiSpeedCache hiSpeedCache = targetMethod.getAnnotation(HiSpeedCache.class);
         boolean useRedis = checkUseRedis(hiSpeedCache);
 
@@ -109,9 +106,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                     hiSpeedCache.keyScript(), JsonRedisObjectConverter.toJson(pjp.getArgs()));
             return pjp.proceed(); // 出现异常则等价于不使用缓存，直接调方法
         }
-
-        Class<?>[] parameterTypes = targetMethod.getParameterTypes();
-        String cacheKey = "HSC:" + clazzName + "." + methodName + ":" + toString(parameterTypes) + (key.isEmpty() ? "" : ":" + key);
+        String cacheKey = generateCacheKey(pjp, key);
 
         int fetchSecond = hiSpeedCache.continueFetchSecond();
         if(fetchSecond > 0) { // 持续更新时，每次接口的访问都会延长持续获取的时长(如果还没超时的话)
@@ -240,6 +235,17 @@ public class HiSpeedCacheAspect implements InitializingBean {
         }
 
         return processClone(hiSpeedCache, ret);
+    }
+
+    /**生成缓存最终的key*/
+    private String generateCacheKey(ProceedingJoinPoint pjp, String key) {
+        MethodSignature signature = (MethodSignature) pjp.getSignature();
+        Method targetMethod = signature.getMethod();
+        String clazzName = signature.getDeclaringType().getName();
+        String methodName = targetMethod.getName();
+        Class<?>[] parameterTypes = targetMethod.getParameterTypes();
+        return "HSC:" + clazzName + "." + methodName + ":"
+                + toString(parameterTypes) + (key.isEmpty() ? "" : ":" + key);
     }
 
     private String generateKey(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache) {
