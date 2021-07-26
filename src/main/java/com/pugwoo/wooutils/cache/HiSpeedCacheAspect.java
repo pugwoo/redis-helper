@@ -10,16 +10,12 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.mvel2.MVEL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
-import javax.annotation.PostConstruct;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @EnableAspectJAutoProxy
 @Aspect
-public class HiSpeedCacheAspect {
+public class HiSpeedCacheAspect implements InitializingBean {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HiSpeedCacheAspect.class);
 
@@ -41,8 +37,8 @@ public class HiSpeedCacheAspect {
     @Autowired(required = false)
     private RedisHelper redisHelper;
 
-    @PostConstruct
-    private void init() {
+    @Override
+    public void afterPropertiesSet() throws Exception {
         if(redisHelper == null) {
             LOGGER.info("@HiSpeedCache init success.");
         } else {
