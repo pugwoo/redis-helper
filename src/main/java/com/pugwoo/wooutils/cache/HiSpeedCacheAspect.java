@@ -101,23 +101,13 @@ public class HiSpeedCacheAspect implements InitializingBean {
         HiSpeedCache hiSpeedCache = targetMethod.getAnnotation(HiSpeedCache.class);
         boolean useRedis = checkUseRedis(hiSpeedCache);
 
-        String key = "";
-        String keyScript = hiSpeedCache.keyScript().trim();
-        if (!keyScript.isEmpty()) {
-            Object[] args = pjp.getArgs();
-            try {
-                Map<String, Object> context = new HashMap<>();
-                context.put("args", args);
-
-                Object result = MVEL.eval(keyScript, context);
-                if (result != null) { // 返回结果为null等价于keyScript为空字符串
-                    key = result.toString();
-                }
-            } catch (Throwable e) {
-                LOGGER.error("eval keyScript fail, keyScript:{}, args:{}",
-                        keyScript, JsonRedisObjectConverter.toJson(args));
-                return pjp.proceed(); // 出现异常则等价于不使用缓存，直接调方法
-            }
+        String key;
+        try {
+            key = generateKey(pjp, hiSpeedCache);
+        } catch (Throwable e) {
+            LOGGER.error("eval keyScript fail, keyScript:{}, args:{}",
+                    hiSpeedCache.keyScript(), JsonRedisObjectConverter.toJson(pjp.getArgs()));
+            return pjp.proceed(); // 出现异常则等价于不使用缓存，直接调方法
         }
 
         Class<?>[] parameterTypes = targetMethod.getParameterTypes();
@@ -250,6 +240,23 @@ public class HiSpeedCacheAspect implements InitializingBean {
         }
 
         return processClone(hiSpeedCache, ret);
+    }
+
+    private String generateKey(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache) {
+        String key = "";
+
+        String keyScript = hiSpeedCache.keyScript().trim();
+        if (!keyScript.isEmpty()) {
+            Map<String, Object> context = new HashMap<>();
+            context.put("args", pjp.getArgs()); // 类型是Object[]
+
+            Object result = MVEL.eval(keyScript, context);
+            if (result != null) { // 返回结果为null等价于keyScript为空字符串
+                key = result.toString();
+            }
+        }
+
+        return key;
     }
 
     private boolean checkUseRedis(HiSpeedCache hiSpeedCache) {
