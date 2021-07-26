@@ -159,7 +159,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
         synchronized (HiSpeedCacheAspect.class) {
             int expireSecond = Math.max(hiSpeedCache.expireSecond(), hiSpeedCache.continueFetchSecond());
-            long expireTime = expireSecond * 1000 + System.currentTimeMillis();
+            long expireTime = expireSecond * 1000L + System.currentTimeMillis();
 
             if(useRedis) {
                 if(ret != null) {
@@ -187,7 +187,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 ContinueFetchDTO continueFetchDTO = new ContinueFetchDTO(pjp, hiSpeedCache, expireTime, cacheNullValue);
                 keyContinueFetchMap.put(cacheKey, continueFetchDTO);
                 long nextFetchTime = Math.min(hiSpeedCache.expireSecond(), hiSpeedCache.continueFetchSecond())
-                        * 1000 + System.currentTimeMillis();
+                        * 1000L + System.currentTimeMillis();
                 addFetchToTimeLine(nextFetchTime, cacheKey);
             }
         }
@@ -224,7 +224,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
             ContinueFetchDTO continueFetchDTO = keyContinueFetchMap.get(cacheKey);
             if(continueFetchDTO != null) {
                 continueFetchDTO.pjp = pjp;
-                continueFetchDTO.expireTimestamp = fetchSecond * 1000 + System.currentTimeMillis();
+                continueFetchDTO.expireTimestamp = fetchSecond * 1000L + System.currentTimeMillis();
             }
         }
     }
@@ -448,7 +448,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                             return;
                         }
                         // 安排下一次调用
-                        long nextTime = continueFetchDTO.hiSpeedCache.expireSecond() * 1000 + System.currentTimeMillis();
+                        long nextTime = continueFetchDTO.hiSpeedCache.expireSecond() * 1000L + System.currentTimeMillis();
 
                         // 多线程执行更新任务
                         executorService.submit(new Runnable() {
@@ -470,7 +470,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                                     long end = System.currentTimeMillis();
 
                                     // 如果方法的执行时间，超过了数据的超时时间，是不太正常的
-                                    if (end - start >= continueFetchDTO.hiSpeedCache.expireSecond() * 1000) {
+                                    if (end - start >= continueFetchDTO.hiSpeedCache.expireSecond() * 1000L) {
                                         LOGGER.warn("call {} cost {} ms, more than expire second:{} second",
                                                 cacheKey, end - start, continueFetchDTO.hiSpeedCache.expireSecond());
                                     }
