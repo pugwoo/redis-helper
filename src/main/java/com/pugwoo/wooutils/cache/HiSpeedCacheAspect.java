@@ -116,7 +116,6 @@ public class HiSpeedCacheAspect implements InitializingBean {
         
         // 查看数据是否有命中，有则直接返回
         if(useRedis) {
-            
             // 如果设置了缓存redis数据到本地，则尝试获取本地缓存数据
             if (cacheRedisData) {
                 Object cacheData = getCacheData(cacheKey);
@@ -133,20 +132,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
                     }
                     return null; // 命中null值缓存
                 }
-                
-                Class<?> returnClazz = targetMethod.getReturnType();
-                Class<?> genericClass1 = hiSpeedCache.genericClass1();
-                Class<?> genericClass2 = hiSpeedCache.genericClass2();
-    
-                Object result;
-                IRedisObjectConverter redisObjectConverter = redisHelper.getRedisObjectConverter();
-                if(genericClass1 == Void.class && genericClass2 == Void.class) {
-                    result = redisObjectConverter.convertToObject(value, returnClazz);
-                } else if (genericClass1 != Void.class && genericClass2 == Void.class) {
-                    result = redisObjectConverter.convertToObject(value, returnClazz, genericClass1);
-                } else {
-                    result = redisObjectConverter.convertToObject(value, returnClazz, genericClass1, genericClass2);
-                }
+
+                Object result = parseJson(value, targetMethod, hiSpeedCache);
                 if (cacheRedisData) { // 缓存到本地
                     putCacheData(cacheKey, result, cacheRedisDataMillisecond + System.currentTimeMillis());
                 }
@@ -308,6 +295,25 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private void putCacheData(String cacheKey, Object cacheData, long expireTimestamp) {
         dataMap.put(cacheKey, cacheData);
         changeKeyExpireTime(cacheKey, expireTimestamp);
+    }
+
+    /**解析json为object*/
+    private Object parseJson(String value, Method targetMethod, HiSpeedCache hiSpeedCache) {
+        Class<?> returnClazz = targetMethod.getReturnType();
+        Class<?> genericClass1 = hiSpeedCache.genericClass1();
+        Class<?> genericClass2 = hiSpeedCache.genericClass2();
+
+        Object result;
+        IRedisObjectConverter redisObjectConverter = redisHelper.getRedisObjectConverter();
+        if(genericClass1 == Void.class && genericClass2 == Void.class) {
+            result = redisObjectConverter.convertToObject(value, returnClazz);
+        } else if (genericClass1 != Void.class && genericClass2 == Void.class) {
+            result = redisObjectConverter.convertToObject(value, returnClazz, genericClass1);
+        } else {
+            result = redisObjectConverter.convertToObject(value, returnClazz, genericClass1, genericClass2);
+        }
+
+        return result;
     }
     
     /*处理结果值克隆的问题*/
