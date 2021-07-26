@@ -169,11 +169,9 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 }
             } else {
                 if(ret != null) {
-                    dataMap.put(cacheKey, ret);
-                    changeKeyExpireTime(cacheKey, expireTime);
+                    putCacheData(cacheKey, ret, expireTime);
                 } else if (cacheNullValue) {
-                    dataMap.put(cacheKey, NULL_VALUE); // 因为concurrentHashMap不能放null
-                    changeKeyExpireTime(cacheKey, expireTime);
+                    putCacheData(cacheKey, NULL_VALUE, expireTime);
                 }
             }
 
