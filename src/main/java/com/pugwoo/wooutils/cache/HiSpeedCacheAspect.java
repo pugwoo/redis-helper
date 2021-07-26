@@ -38,7 +38,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private RedisHelper redisHelper;
 
     @Override
-    public void afterPropertiesSet() throws Exception {
+    public void afterPropertiesSet() {
         if(redisHelper == null) {
             LOGGER.info("@HiSpeedCache init success.");
         } else {
@@ -47,7 +47,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
     }
 
     // 多线程执行更新数据任务，默认十个线程
-    private ExecutorService executorService;
+    private final ExecutorService executorService;
 
     public HiSpeedCacheAspect() {
         executorService = Executors.newFixedThreadPool(10,
@@ -65,9 +65,9 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     private static class ContinueFetchDTO {
         private volatile ProceedingJoinPoint pjp;
-        private volatile HiSpeedCache hiSpeedCache;
+        private final HiSpeedCache hiSpeedCache;
         private volatile long expireTimestamp; // 此次调用的过时时间（毫秒时间戳）
-        private volatile boolean cacheNullValue;
+        private final boolean cacheNullValue;
 
         private ContinueFetchDTO(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache, long expireTimestamp, boolean cacheNullValue) {
             this.pjp = pjp;
