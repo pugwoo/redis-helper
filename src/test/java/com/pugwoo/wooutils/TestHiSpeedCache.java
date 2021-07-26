@@ -82,7 +82,7 @@ public class TestHiSpeedCache {
         
         // 共计 10s + 3s +20s = 33s
         System.out.println("cost:" + (end - start) + "ms");
-        assert (end - start) >= 33000 && (end - start) < 34900;
+        assert (end - start) >= 33000 && (end - start) < 34000;
         
         // String getSomethingWithCache is start    @ 2021-07-25 01:04:15
         // String getSomethingWithCache is executed @ 2021-07-25 01:04:18  第一次调用
