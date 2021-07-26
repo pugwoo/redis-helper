@@ -534,7 +534,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                     LOGGER.error("clean expire data error", e);
                 }
                 try {
-                    Thread.sleep(50);
+                    Thread.sleep(1000);
                 } catch (InterruptedException e) { // ignore
                 }
             }
@@ -551,7 +551,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                     LOGGER.error("refresh result error", e);
                 }
                 try {
-                    Thread.sleep(50);
+                    Thread.sleep(100);
                 } catch (InterruptedException e) { // ignore
                 }
             }
