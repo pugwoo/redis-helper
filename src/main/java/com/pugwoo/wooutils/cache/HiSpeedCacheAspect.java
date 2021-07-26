@@ -182,14 +182,6 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 return result; // 因为这个值是新构造的，也没有缓存，所以不需要processClone
             }
         } else {
-            //if (dataMap.containsKey(cacheKey)) {
-            //    Object data = dataMap.get(cacheKey);
-            //    if(data == NULL_VALUE) { // 缓存null值，因为是内存，所以可以用==比较
-            //        return null;
-            //    }
-            //    return processClone(hiSpeedCache, data);
-            //}
-
             Object cacheData = getCacheData(cacheKey);
             if (cacheData != null) {
                 return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData);
