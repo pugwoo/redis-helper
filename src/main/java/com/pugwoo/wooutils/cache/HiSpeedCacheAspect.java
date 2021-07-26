@@ -99,14 +99,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
         String methodName = targetMethod.getName();
 
         HiSpeedCache hiSpeedCache = targetMethod.getAnnotation(HiSpeedCache.class);
-        boolean useRedis = false;
-        if(hiSpeedCache.useRedis()) {
-            if(redisHelper != null) {
-                useRedis = true;
-            } else {
-                LOGGER.error("HiSpeedCache config useRedis=true, while there is no redisHelper");
-            }
-        }
+        boolean useRedis = checkUseRedis(hiSpeedCache);
 
         String key = "";
         String keyScript = hiSpeedCache.keyScript().trim();
@@ -257,6 +250,18 @@ public class HiSpeedCacheAspect implements InitializingBean {
         }
 
         return processClone(hiSpeedCache, ret);
+    }
+
+    private boolean checkUseRedis(HiSpeedCache hiSpeedCache) {
+        boolean useRedis = false;
+        if(hiSpeedCache.useRedis()) {
+            if(redisHelper != null) {
+                useRedis = true;
+            } else {
+                LOGGER.error("HiSpeedCache config useRedis=true, while there is no redisHelper");
+            }
+        }
+        return useRedis;
     }
 
     /**
