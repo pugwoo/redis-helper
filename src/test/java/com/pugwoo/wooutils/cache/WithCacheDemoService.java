@@ -73,7 +73,8 @@ public class WithCacheDemoService {
         return new Date();
     }
 
-    @HiSpeedCache(continueFetchSecond = 10, useRedis = true, genericClass1 = Date.class)
+    @HiSpeedCache(continueFetchSecond = 10, useRedis = true, genericClass1 = Date.class,
+        cacheRedisDataMillisecond = 100)
     public List<Date> getSomethingWithRedis() throws Exception {
         Thread.sleep(3000);
         List<Date> result = new ArrayList<>();
