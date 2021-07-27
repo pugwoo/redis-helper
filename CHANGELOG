@@ -1,3 +1,4 @@
+2021年7月27日
 v1.0.3
 - [add] HiSpeedCache添加cacheRedisDataMillisecond属性，支持使用redis做缓存时，在本地进行二级缓存
 
