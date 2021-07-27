@@ -7,8 +7,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 
 @ContextConfiguration(locations = {"classpath:applicationContext-context.xml"})
 @RunWith(SpringJUnit4ClassRunner.class)
@@ -217,5 +219,37 @@ public class TestHiSpeedCache {
         System.out.println("qps:" + qps);
 
         assert qps > 300000;  // qps应该30万以上，如果不用cacheRedisDataMillisecond是不可能达到30万qps的
+    }
+
+    @Test
+    public void testExpireTime() throws Exception {
+        UUID.randomUUID(); // 第一次跑这个比较久，所以先预热
+
+        // 这里大概运行20+秒，除了头和尾，大概应该有18次是cost在1000到1001之间，误差不会超过1毫秒（除了四舍五入）
+        List<Long> costList = new ArrayList<>();
+
+        long lastGetTime = System.currentTimeMillis();
+        String lastUuid = withCacheDemoService.getRandomString();
+        for (int i = 0; i < 10000; i++) {
+            String uuid = withCacheDemoService.getRandomString();
+            if (!uuid.equals(lastUuid)) { // uuid发生变化了，说明缓存失效了
+                long cost = System.currentTimeMillis() - lastGetTime;
+                System.out.println("cost:" + cost);
+                costList.add(cost);
+
+                lastGetTime = System.currentTimeMillis();
+                lastUuid = uuid;
+            }
+            Thread.sleep(2);
+        }
+
+        // 至少18次1000或1001
+        int count = 0;
+        for (Long cost : costList) {
+            if (cost == 1000 || cost == 1001) {
+                count++;
+            }
+        }
+        assert count >= 18;
     }
 }

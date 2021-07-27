@@ -106,4 +106,11 @@ public class WithCacheDemoService {
         map.put("33", new Date());
         return map;
     }
+
+    // 用于测试超时时间是否准时
+    @HiSpeedCache(expireSecond = 1)
+    public String getRandomString() {
+        return UUID.randomUUID().toString();
+    }
+
 }
