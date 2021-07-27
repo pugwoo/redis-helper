@@ -74,7 +74,7 @@ public class WithCacheDemoService {
     }
 
     @HiSpeedCache(continueFetchSecond = 10, useRedis = true, genericClass1 = Date.class,
-        cacheRedisDataMillisecond = 100)
+        cacheRedisDataMillisecond = 100) // 测试极端情况下，只缓存1毫秒，qps能达到8万
     public List<Date> getSomethingWithRedis() throws Exception {
         Thread.sleep(3000);
         List<Date> result = new ArrayList<>();

@@ -201,4 +201,21 @@ public class TestHiSpeedCache {
         assert withCacheDemoService.getSomethingWithCacheCount() <= ((int)cost/1000);
     }
 
+    @Test
+    public void testBenchmarkRedisCache() throws Exception {
+        // 测试调用1000万次的时间
+        int times = 10000000;
+        long start = System.currentTimeMillis();
+        for(int i = 0; i < times; i++) {
+            withCacheDemoService.getSomethingWithRedis();
+        }
+        long end = System.currentTimeMillis();
+
+        long cost = (end - start);
+        System.out.println("cost:" + cost + "ms");
+        double qps = times / (cost / 1000.0);
+        System.out.println("qps:" + qps);
+
+        assert qps > 300000;  // qps应该30万以上，如果不用cacheRedisDataMillisecond是不可能达到30万qps的
+    }
 }
