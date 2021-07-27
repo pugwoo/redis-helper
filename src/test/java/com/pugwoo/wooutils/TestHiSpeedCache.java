@@ -72,7 +72,7 @@ public class TestHiSpeedCache {
             assert str == null;
             Thread.sleep(100);
         }
-        Thread.sleep(20000);
+        Thread.sleep(20000); // sleep的时候后台一直在fetch数据
         long end = System.currentTimeMillis();
         
         // 共计 10s + 3s +20s = 33s
