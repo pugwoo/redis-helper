@@ -14,9 +14,9 @@ public class WithCacheDemoService {
 
     private AtomicInteger getSomething = new AtomicInteger(0);
 
-    public String getSomething() throws Exception {
+    public String getSomething(int sleepSecond) throws Exception {
         getSomething.incrementAndGet();
-        Thread.sleep(3000);
+        Thread.sleep(sleepSecond * 1000L);
         return "hello";
     }
 

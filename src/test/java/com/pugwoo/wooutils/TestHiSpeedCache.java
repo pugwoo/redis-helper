@@ -20,39 +20,34 @@ public class TestHiSpeedCache {
     @Test
     public void testNoCache() throws Exception {
         long start = System.currentTimeMillis();
-        String str = withCacheDemoService.getSomething();
+        String str = withCacheDemoService.getSomething(3);
         assert str.equals("hello");
-        System.out.println(str + new Date());
-        str = withCacheDemoService.getSomething();
+
+        str = withCacheDemoService.getSomething(3);
         assert str.equals("hello");
-        System.out.println(str + new Date());
-        str = withCacheDemoService.getSomething();
+
+        str = withCacheDemoService.getSomething(3);
         assert str.equals("hello");
-        System.out.println(str + new Date());
         long end = System.currentTimeMillis();
 
         System.out.println("cost:" + (end - start) + "ms");
-        assert (end- start) >= 9000;
+        assert (end - start) >= 9000 && (end - start) <= 9100;
         assert withCacheDemoService.getSomethingCount() == 3; // 实际也执行了3次
     }
     
     /** 缓存null值 */
     @Test
     public void testWithCache() throws Exception {
-        Thread.sleep(15000); // 等待缓存过期，缓存的continueFetchSecond是10秒
-
         withCacheDemoService.resetSomethingWithCacheCount();
 
         long start = System.currentTimeMillis();
         String str = withCacheDemoService.getSomethingWithCache();
         assert str == null;
-        System.out.println(str + new Date());
+
         str = withCacheDemoService.getSomethingWithCache(); // 这次调用就直接走了缓存
         assert str == null;
-        System.out.println(str + new Date());
         str = withCacheDemoService.getSomethingWithCache(); // 这次调用就直接走了缓存
         assert str == null;
-        System.out.println(str + new Date());
         long end = System.currentTimeMillis();
 
         System.out.println("cost:" + (end - start) + "ms");
