@@ -1,3 +1,6 @@
+v1.1.0
+- [enhance] HiSpeedCache支持泛型的返回值，不需要用户自行设定了；同时默认克隆由false改为true
+
 2021年7月27日
 v1.0.3
 - [add] HiSpeedCache添加cacheRedisDataMillisecond属性，支持使用redis做缓存时，在本地进行二级缓存

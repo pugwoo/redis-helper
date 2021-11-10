@@ -1,6 +1,5 @@
 package com.pugwoo.wooutils.cache;
 
-import com.pugwoo.wooutils.redis.IRedisObjectConverter;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -15,7 +14,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
 import java.lang.reflect.Method;
-import java.util.*;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -98,11 +103,23 @@ public class HiSpeedCacheAspect implements InitializingBean {
         HiSpeedCache hiSpeedCache = targetMethod.getAnnotation(HiSpeedCache.class);
         boolean useRedis = checkUseRedis(hiSpeedCache);
 
+        Class<?>[] genericClasses = null;
+        Type genericReturnType = targetMethod.getGenericReturnType();
+        if (genericReturnType instanceof ParameterizedType) { // 当返回参数有泛型时，才会是这个类型
+            Type[] actualTypeArguments = ((ParameterizedType) genericReturnType).getActualTypeArguments();
+            if (actualTypeArguments != null || actualTypeArguments.length > 0) {
+                genericClasses = new Class[actualTypeArguments.length];
+                for (int i = 0; i < actualTypeArguments.length; i++) {
+                    genericClasses[i] = (Class<?>) actualTypeArguments[i];
+                }
+            }
+        }
+
         String key;
         try {
             key = generateKey(pjp, hiSpeedCache);
         } catch (Throwable e) {
-            LOGGER.error("eval keyScript fail, keyScript:{}, args:{}",
+            LOGGER.error("eval keyScript fail, keyScript:{}, args:{}, HiSpeedCache is disabled for this call.",
                     hiSpeedCache.keyScript(), JsonRedisObjectConverter.toJson(pjp.getArgs()));
             return pjp.proceed(); // 出现异常则等价于不使用缓存，直接调方法
         }
@@ -120,13 +137,13 @@ public class HiSpeedCacheAspect implements InitializingBean {
             if (cacheRedisData) {
                 Object cacheData = getCacheData(cacheKey);
                 if (cacheData != null) {
-                    return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData);
+                    return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, genericClasses);
                 }
             }
 
             String value = redisHelper.getString(cacheKey);
             if(value != null) { // == null则缓存没命中，应该走下面调用逻辑
-                Object result = NULL_VALUE.equals(value) ? null : parseJson(value, targetMethod, hiSpeedCache);
+                Object result = NULL_VALUE.equals(value) ? null : parseJson(value, targetMethod, genericClasses);
                 if (cacheRedisData) { // 缓存到本地
                     putCacheData(cacheKey, result == null ? NULL_VALUE : result,
                             cacheRedisDataMillisecond + System.currentTimeMillis());
@@ -136,7 +153,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
         } else {
             Object cacheData = getCacheData(cacheKey);
             if (cacheData != null) {
-                return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData);
+                return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, genericClasses);
             }
         }
 
@@ -186,7 +203,12 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
         startThread(hiSpeedCache);
 
-        return processClone(hiSpeedCache, ret);
+        // 如果用了redis且没有用cacheRedisData，则不需要克隆
+        if (useRedis && !cacheRedisData) {
+            return ret;
+        } else {
+            return processClone(hiSpeedCache, ret, genericClasses);
+        }
     }
 
     /**启用清理线程和更新线程*/
@@ -295,26 +317,18 @@ public class HiSpeedCacheAspect implements InitializingBean {
     }
 
     /**解析json为object*/
-    private Object parseJson(String value, Method targetMethod, HiSpeedCache hiSpeedCache) {
+    private Object parseJson(String value, Method targetMethod, Class<?>... genericClasses) {
         Class<?> returnClazz = targetMethod.getReturnType();
-        Class<?> genericClass1 = hiSpeedCache.genericClass1();
-        Class<?> genericClass2 = hiSpeedCache.genericClass2();
 
-        Object result;
-        IRedisObjectConverter redisObjectConverter = redisHelper.getRedisObjectConverter();
-        if(genericClass1 == Void.class && genericClass2 == Void.class) {
-            result = redisObjectConverter.convertToObject(value, returnClazz);
-        } else if (genericClass1 != Void.class && genericClass2 == Void.class) {
-            result = redisObjectConverter.convertToObject(value, returnClazz, genericClass1);
+        if (genericClasses == null || genericClasses.length == 0) {
+            return JsonRedisObjectConverter.parse(value, returnClazz);
         } else {
-            result = redisObjectConverter.convertToObject(value, returnClazz, genericClass1, genericClass2);
+            return JsonRedisObjectConverter.parse(value, returnClazz, genericClasses);
         }
-
-        return result;
     }
     
     /*处理结果值克隆的问题*/
-    private Object processClone(HiSpeedCache hiSpeedCache, Object data) {
+    private Object processClone(HiSpeedCache hiSpeedCache, Object data, Class<?>... genericClasses) {
         if(data == null) {
             return null;
         }
@@ -324,16 +338,11 @@ public class HiSpeedCacheAspect implements InitializingBean {
             if(clazz == String.class || clazz == Integer.class || clazz == Long.class) {
                 return data;
             }
-            Class<?> genericClass1 = hiSpeedCache.genericClass1();
-            Class<?> genericClass2 = hiSpeedCache.genericClass2();
-            if(genericClass1 == Void.class && genericClass2 == Void.class) {
+
+            if (genericClasses == null || genericClasses.length == 0) {
                 return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
-            } else if (genericClass1 != Void.class && genericClass2 == Void.class) {
-                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data),
-                        clazz, genericClass1);
             } else {
-                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data),
-                        clazz, genericClass1, genericClass2);
+                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz, genericClasses);
             }
         } else {
             return data;

@@ -28,7 +28,7 @@ public class WithCacheDemoService {
 
     private AtomicInteger getSomethingWithCache = new AtomicInteger(0);
 
-    @HiSpeedCache(expireSecond = 1, continueFetchSecond = 10)
+    @HiSpeedCache(expireSecond = 1, continueFetchSecond = 10, cloneReturn = false)
     public String getSomethingWithCache() throws Exception {
         getSomethingWithCache.incrementAndGet();
         Thread.sleep(3000);
@@ -37,7 +37,8 @@ public class WithCacheDemoService {
         return null; // 测试缓存null值
     }
     
-    @HiSpeedCache(expireSecond = 4, continueFetchSecond = 10, useRedis = true, cacheRedisDataMillisecond = 300)
+    @HiSpeedCache(expireSecond = 4, continueFetchSecond = 10,
+            useRedis = true, cacheRedisDataMillisecond = 300, cloneReturn = false)
     public String getSomethingWithCache2() throws Exception {
         SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         System.out.println("String getSomethingWithCache is start    @ " + df.format(new Date()));
@@ -47,7 +48,7 @@ public class WithCacheDemoService {
         return null;
     }
     
-    @HiSpeedCache(expireSecond = 1, continueFetchSecond = 10, cacheNullValue = false)
+    @HiSpeedCache(expireSecond = 1, continueFetchSecond = 10, cacheNullValue = false, cloneReturn = false)
     public String getSomethingWithNotCacheNullValue() throws Exception {
         getSomethingWithCache.incrementAndGet();
         Thread.sleep(3000);
@@ -73,8 +74,8 @@ public class WithCacheDemoService {
         return new Date();
     }
 
-    @HiSpeedCache(continueFetchSecond = 10, useRedis = true, genericClass1 = Date.class,
-        cacheRedisDataMillisecond = 100) // 测试极端情况下，只缓存1毫秒，qps能达到8万
+    @HiSpeedCache(continueFetchSecond = 10, useRedis = true, cacheRedisDataMillisecond = 100,
+      cloneReturn = false) // 测试极端情况下，只缓存1毫秒，qps能达到8万
     public List<Date> getSomethingWithRedis() throws Exception {
         Thread.sleep(3000);
         List<Date> result = new ArrayList<>();
@@ -85,7 +86,7 @@ public class WithCacheDemoService {
     }
 
     // 支持克隆情况下的泛型
-    @HiSpeedCache(continueFetchSecond = 10, cloneReturn = true, genericClass1 = Date.class)
+    @HiSpeedCache(continueFetchSecond = 10, cloneReturn = true)
     public List<Date> getSomeDateWithCache() throws Exception {
         Thread.sleep(3000);
         List<Date> dates = new ArrayList<>();
@@ -96,8 +97,7 @@ public class WithCacheDemoService {
     }
 
     // 支持克隆情况下的泛型
-    @HiSpeedCache(continueFetchSecond = 10, cloneReturn = true,
-            genericClass1 = String.class, genericClass2 = Date.class)
+    @HiSpeedCache(continueFetchSecond = 10, cloneReturn = true)
     public Map<String, Date> getSomeDateWithCache2() throws Exception {
         Thread.sleep(3000);
         Map<String, Date> map = new HashMap<>();
@@ -108,7 +108,7 @@ public class WithCacheDemoService {
     }
 
     // 用于测试超时时间是否准时
-    @HiSpeedCache(expireSecond = 1)
+    @HiSpeedCache(expireSecond = 1, cloneReturn = false)
     public String getRandomString() {
         return UUID.randomUUID().toString();
     }

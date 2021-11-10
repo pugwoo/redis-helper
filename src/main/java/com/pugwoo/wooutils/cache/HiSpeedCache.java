@@ -41,27 +41,16 @@ public @interface HiSpeedCache {
     boolean concurrentFetch() default false;
 
     /**
-     * 是否json克隆返回数据，默认false。<br>
+     * 是否json克隆返回数据，默认true<br>
      * 如果启动克隆，那么调用者对返回值进行修改，就不会影响缓存的值。<br>
-     * 【注意】当此值为true时，请自行测试验证克隆的数据是否有问题。<br>
+     * 如果没有启动克隆，性能能达到最大。请注意，调用者如果修改了返回值，等于直接修改缓存的值，可能导致严重的bug，因此不建议修改返回值。
      */
-    boolean cloneReturn() default false;
-
-    /**
-     * 如果克隆的数据是泛型的，则这里支持指定泛型，这个是第1个泛型
-     */
-    Class<?> genericClass1() default Void.class;
-
-    /**
-     * 如果克隆的数据是泛型的，则这里支持指定泛型，这个是第2个泛型
-     */
-    Class<?> genericClass2() default Void.class;
+    boolean cloneReturn() default true;
 
     /**
      * 是否使用redis保存数据，默认关闭。<br>
      * 只有当前是Spring容器且有RedisHelper的bean时，useRedis=true才生效，否则等价于useRedis=false，即便设置为true。<br>
      * 当使用useRedis=true时，cloneReturn选项失效。<br>
-     * 【注意】当返回类型有泛型时，记得设置genericClass1或genericClass2的值，最多支持2个泛型的情况。<br>
      */
     boolean useRedis() default false;
     

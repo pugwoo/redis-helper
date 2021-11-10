@@ -19,28 +19,8 @@ public interface IRedisObjectConverter {
 	 *
 	 * @param str json字符串
 	 * @param clazz 转换成的类
-	 * @return
+	 * @param genericClasses 泛型，支持多个泛型
 	 */
-	<T> T convertToObject(String str, Class<T> clazz);
+	<T> T convertToObject(String str, Class<T> clazz, Class<?>... genericClasses);
 
-    /**
-     * 将字符串转换成对象，支持一个泛型【注意】需要自行处理str为null值的情况
-     * @param str json字符串
-	 * @param clazz 转换成的类
-	 * @param genericClass 泛型类
-     * @return
-     */
-    <T> T convertToObject(String str, Class<T> clazz, Class<?> genericClass);
-
-    /**
-     * 将字符串转换成对象，，支持2个泛型【注意】需要自行处理str为null值的情况
-     *
-     * @param str json字符串
-     * @param clazz 转换成的类
-	 * @param genericClass1 泛型类1
-	 * @param genericClass2 泛型类2
-     * @return
-     */
-    <T> T convertToObject(String str, Class<T> clazz, Class<?> genericClass1, Class<?> genericClass2);
-	
 }

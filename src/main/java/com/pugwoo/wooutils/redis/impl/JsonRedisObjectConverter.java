@@ -35,7 +35,7 @@ public class JsonRedisObjectConverter implements IRedisObjectConverter {
 
 		@Override
 		public void serialize(Object nullKey, JsonGenerator jsonGenerator, SerializerProvider unused)
-				throws IOException, JsonProcessingException {
+				throws IOException {
 			jsonGenerator.writeFieldName("");
 		}
 
@@ -58,58 +58,26 @@ public class JsonRedisObjectConverter implements IRedisObjectConverter {
 		}
 	}
 
-	@Override
-	public <T> T convertToObject(String str, Class<T> clazz) {
-		return parse(str, clazz);
-	}
-
-	public static <T> T parse(String str, Class<T> clazz) {
-		if(str == null || str.isEmpty()) {
-			return null;
-		}
-		try {
-			return mapper.readValue(str, clazz);
-		} catch (Exception e) {
-			LOGGER.error("convert json string to object fail", e);
-			return null;
-		}
-	}
-
     @Override
-    public <T> T convertToObject(String str, Class<T> clazz, Class<?> genericClass) {
-		return parse(str, clazz, genericClass);
+    public <T> T convertToObject(String str, Class<T> clazz, Class<?>... genericClasses) {
+		return parse(str, clazz, genericClasses);
     }
 
-    public static <T> T parse(String str, Class<T> clazz, Class<?> genericClass) {
-		if (str == null || str.isEmpty()) {
+    public static <T> T parse(String str, Class<T> clazz, Class<?>... genericClasses) {
+		if (str == null || str.isEmpty()) { // 这里不要str.trim()，也就是空白的字符串可能是有用的字符串
 			return null;
 		}
 		try {
-			JavaType type = mapper.getTypeFactory()
-					.constructParametricType(clazz, genericClass);
-			return mapper.readValue(str, type);
+			if (genericClasses == null || genericClasses.length == 0) {
+				return mapper.readValue(str, clazz);
+			} else {
+				JavaType type = mapper.getTypeFactory().constructParametricType(clazz, genericClasses);
+				return mapper.readValue(str, type);
+			}
 		} catch (Exception e) {
 			LOGGER.error("convert json string to object fail", e);
 			return null;
 		}
 	}
 
-    @Override
-    public <T> T convertToObject(String str, Class<T> clazz, Class<?> genericClass1, Class<?> genericClass2) {
-		return parse(str, clazz, genericClass1, genericClass2);
-    }
-
-    public static <T> T parse(String str, Class<T> clazz, Class<?> genericClass1, Class<?> genericClass2) {
-		if (str == null || str.isEmpty()) {
-			return null;
-		}
-		try {
-			JavaType type = mapper.getTypeFactory()
-					.constructParametricType(clazz, genericClass1, genericClass2);
-			return mapper.readValue(str, type);
-		} catch (Exception e) {
-			LOGGER.error("convert json string to object fail", e);
-			return null;
-		}
-	}
 }

@@ -1,6 +1,7 @@
 package com.pugwoo.wooutils;
 
 import com.pugwoo.wooutils.cache.WithCacheDemoService;
+import com.pugwoo.wooutils.json.JSON;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +11,7 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @ContextConfiguration(locations = {"classpath:applicationContext-context.xml"})
@@ -21,6 +23,8 @@ public class TestHiSpeedCache {
 
     @Test
     public void testNoCache() throws Exception {
+        Integer somethingCount = withCacheDemoService.getSomethingCount();
+
         long start = System.currentTimeMillis();
         String str = withCacheDemoService.getSomething(3);
         assert str.equals("hello");
@@ -34,7 +38,7 @@ public class TestHiSpeedCache {
 
         System.out.println("cost:" + (end - start) + "ms");
         assert (end - start) >= 9000 && (end - start) <= 9100;
-        assert withCacheDemoService.getSomethingCount() == 3; // 实际也执行了3次
+        assert withCacheDemoService.getSomethingCount() - somethingCount == 3; // 实际也执行了3次
     }
     
     /** 缓存null值 */
@@ -157,7 +161,7 @@ public class TestHiSpeedCache {
         long end = System.currentTimeMillis();
 
         System.out.println("cost:" + (end - start) + "ms");
-        assert (end - start) > 3000 && (end - start) < 3800;
+        assert (end - start) >= 3000 && (end - start) < 3800;
     }
 
     @Test
@@ -225,7 +229,7 @@ public class TestHiSpeedCache {
     public void testExpireTime() throws Exception {
         UUID.randomUUID(); // 第一次跑这个比较久，所以先预热
 
-        // 这里大概运行20+秒，除了头和尾，大概应该有18次是cost在1000到1001之间，误差不会超过1毫秒（除了四舍五入）
+        // 这里大概运行20+秒，除了头和尾，大概应该有18次是cost在1000到1002之间，误差不会超过1毫秒（除了四舍五入）
         List<Long> costList = new ArrayList<>();
 
         long lastGetTime = System.currentTimeMillis();
@@ -246,10 +250,40 @@ public class TestHiSpeedCache {
         // 至少18次1000或1001
         int count = 0;
         for (Long cost : costList) {
-            if (cost == 1000 || cost == 1001) {
+            if (cost == 1000 || cost == 1001 || cost == 1002) {
                 count++;
             }
         }
         assert count >= 18;
+    }
+
+    /**测试clone & 泛型*/
+    @Test
+    public void testGeneric() throws Exception {
+        for (int i = 0; i < 10; i++) {
+
+            List<Date> dates = withCacheDemoService.getSomeDateWithCache();
+            System.out.println(dates.get(0).getClass());
+            System.out.println(JSON.toJson(dates));
+
+            dates.forEach(o -> {
+                assert o.getClass().equals(Date.class);
+            });
+
+            Thread.sleep(1000);
+        }
+
+        for (int i = 0; i < 10; i++) {
+            Map<String, Date> dates = withCacheDemoService.getSomeDateWithCache2();
+            System.out.println(JSON.toJson(dates));
+
+            dates.forEach((k, v) -> {
+                assert k.getClass().equals(String.class);
+                assert v.getClass().equals(Date.class);
+            });
+
+            Thread.sleep(1000);
+        }
+
     }
 }
