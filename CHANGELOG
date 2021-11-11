@@ -1,3 +1,4 @@
+2021年11月11日
 v1.1.1
 - [enhance] 简化RedisHelper的getObject方法为1至多个泛型（原来只支持1和2个泛型）
 
