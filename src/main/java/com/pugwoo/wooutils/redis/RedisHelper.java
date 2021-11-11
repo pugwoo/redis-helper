@@ -118,20 +118,10 @@ public interface RedisHelper {
 	 * 获取对象，需要提供IRedisObjectConverter的实现对象
 	 *
 	 * @param key redis key
-	 * @param genericClass 支持泛型类
+	 * @param genericClasses 支持泛型类
 	 * @return
 	 */
-	<T> T getObject(String key, Class<T> clazz, Class<?> genericClass);
-
-	/**
-	 * 获取对象，需要提供IRedisObjectConverter的实现对象
-	 *
-	 * @param key redis key
-	 * @param genericClass1 支持泛型类1
-	 * @param genericClass2 支持泛型类2
-	 * @return
-	 */
-	<T> T getObject(String key, Class<T> clazz, Class<?> genericClass1, Class<?> genericClass2);
+	<T> T getObject(String key, Class<T> clazz, Class<?>... genericClasses);
 
 	/**
 	 * 通过keys批量获得redis的key和值

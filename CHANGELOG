@@ -1,3 +1,6 @@
+v1.1.1
+- [enhance] 简化RedisHelper的getObject方法为1至多个泛型（原来只支持1和2个泛型）
+
 2021年11月10日
 v1.1.0
 - [enhance] HiSpeedCache支持泛型的返回值，不需要用户自行设定了；同时默认克隆由false改为true
