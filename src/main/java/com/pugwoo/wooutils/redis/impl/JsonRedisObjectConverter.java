@@ -4,12 +4,16 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.pugwoo.wooutils.redis.IRedisObjectConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 
 /**
  * 使用json只序列化field，不序列化getter setter
@@ -80,4 +84,55 @@ public class JsonRedisObjectConverter implements IRedisObjectConverter {
 		}
 	}
 
+	@Override
+	public <T> T convertToObject(String str, Class<T> clazz, TypeReference<T> typeReference) {
+		return parse(str, clazz, typeReference);
+	}
+
+	public static <T> T parse(String str, Class<T> clazz, TypeReference<T> typeReference) {
+		if (str == null || str.isEmpty()) { // 这里不要str.trim()，也就是空白的字符串可能是有用的字符串
+			return null;
+		}
+		try {
+			if (typeReference == null) {
+				return mapper.readValue(str, clazz);
+			} else {
+				return mapper.readValue(str, typeReference);
+			}
+		} catch (Exception e) {
+			LOGGER.error("convert json string to object fail", e);
+			return null;
+		}
+	}
+
+	public static Object parse(String json, ParameterizedType type) {
+		JavaType javaType = toJavaType(type);
+		try {
+			return mapper.readValue(json, javaType);
+		} catch (Exception e) {
+			LOGGER.error("convert json string to object fail", e);
+			return null;
+		}
+	}
+
+	private static JavaType toJavaType(ParameterizedType type) {
+		TypeFactory typeFactory = mapper.getTypeFactory();
+
+		Type rawType = type.getRawType();
+		Type[] actualTypeArguments = type.getActualTypeArguments();
+
+		JavaType[] javaTypes = new JavaType[actualTypeArguments.length];
+		for (int i = 0; i < actualTypeArguments.length; i++) {
+			if (actualTypeArguments[i] instanceof Class) {
+				javaTypes[i] = typeFactory.constructType(actualTypeArguments[i]);
+			} else if (actualTypeArguments[i] instanceof ParameterizedType) {
+				javaTypes[i] = toJavaType((ParameterizedType) actualTypeArguments[i]);
+			} else {
+				LOGGER.error("unknown actualTypeArguments type:{} in type:{}",
+						actualTypeArguments[i], type);
+			}
+		}
+
+		return typeFactory.constructParametricType((Class<?>) rawType, javaTypes);
+	}
 }
