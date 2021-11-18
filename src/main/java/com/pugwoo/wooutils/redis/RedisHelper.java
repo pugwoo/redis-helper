@@ -1,5 +1,6 @@
 package com.pugwoo.wooutils.redis;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.ScanResult;
@@ -115,13 +116,19 @@ public interface RedisHelper {
 	<T> T getObject(String key, Class<T> clazz);
 
 	/**
-	 * 获取对象，需要提供IRedisObjectConverter的实现对象
+	 * 获取对象，需要提供IRedisObjectConverter的实现对象【不支持嵌套泛型】
 	 *
 	 * @param key redis key
-	 * @param genericClasses 支持泛型类
-	 * @return
+	 * @param genericClasses 支持泛型类，但不支持嵌套泛型，嵌套泛型请使用getObject传入TypeReference的方式
 	 */
 	<T> T getObject(String key, Class<T> clazz, Class<?>... genericClasses);
+
+	/**
+	 * 获取对象，需要提供
+	 * @param key redis key
+	 * @param typeReference 泛型，支持多个泛型和嵌套泛型
+	 */
+	<T> T getObject(String key, Class<T> clazz, TypeReference<T> typeReference);
 
 	/**
 	 * 通过keys批量获得redis的key和值
@@ -131,11 +138,18 @@ public interface RedisHelper {
 	List<String> getStrings(List<String> keys);
 	
 	/**
-	 * 通过keys批量获得redis的key和值
+	 * 通过keys批量获得redis的key和值【不支持泛型，泛型请用带typeReference参数的方法】
 	 * @param keys
 	 * @return 个数和顺序和keys一直，如果key不存在，则其值为null。整个命令操作失败则返回null
 	 */
 	<T> List<T> getObjects(List<String> keys, Class<T> clazz);
+
+	/**
+	 * 通过keys批量获得redis的key和值
+	 * @param typeReference 泛型信息
+	 * @return 个数和顺序和keys一直，如果key不存在，则其值为null。整个命令操作失败则返回null
+	 */
+	<T> List<T> getObjects(List<String> keys, Class<T> clazz, TypeReference<T> typeReference);
 
 	/**
 	 * 使用scan的方式获得key的列表【建议少用，适用于非高频的定时任务中】<br>

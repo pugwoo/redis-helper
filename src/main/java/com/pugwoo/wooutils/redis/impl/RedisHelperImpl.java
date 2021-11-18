@@ -1,5 +1,6 @@
 package com.pugwoo.wooutils.redis.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.pugwoo.wooutils.redis.*;
 import org.mvel2.MVEL;
 import org.mvel2.compiler.ExecutableAccessor;
@@ -341,6 +342,19 @@ public class RedisHelperImpl implements RedisHelper {
     }
 
 	@Override
+	public <T> T getObject(String key, Class<T> clazz, TypeReference<T> typeReference) {
+		if (redisObjectConverter == null) {
+			throw new RuntimeException("IRedisObjectConverter is null");
+		}
+		String value = getString(key);
+		if (value == null) {
+			return null;
+		}
+
+		return redisObjectConverter.convertToObject(value, clazz, typeReference);
+	}
+
+	@Override
 	public List<String> getStrings(List<String> keys) {
 		if(keys == null || keys.isEmpty()) {
 			return new ArrayList<>();
@@ -370,6 +384,28 @@ public class RedisHelperImpl implements RedisHelper {
 		List<T> result = new ArrayList<>();
 		for(String value : values) {
 			result.add(redisObjectConverter.convertToObject(value, clazz));
+		}
+
+		return result;
+	}
+
+	@Override
+	public <T> List<T> getObjects(List<String> keys, Class<T> clazz, TypeReference<T> typeReference) {
+		if (typeReference == null) {
+			return getObjects(keys, clazz);
+		}
+
+		if(redisObjectConverter == null) {
+			throw new RuntimeException("IRedisObjectConverter is null");
+		}
+		List<String> values = getStrings(keys);
+		if(values == null) {
+			return null;
+		}
+
+		List<T> result = new ArrayList<>();
+		for(String value : values) {
+			result.add(redisObjectConverter.convertToObject(value, clazz, typeReference));
 		}
 
 		return result;
