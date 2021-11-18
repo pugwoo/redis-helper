@@ -1,3 +1,8 @@
+2021年11月18日
+v1.1.2
+- [enhance] RedisHelper的getObject方法支持嵌套泛型；增加getObjects支持泛型的方法
+- [enhance] HiSpeedCache支持泛型的返回值，新增支持嵌套泛型
+
 2021年11月11日
 v1.1.1
 - [enhance] 简化RedisHelper的getObject方法为1至多个泛型（原来只支持1和2个泛型）

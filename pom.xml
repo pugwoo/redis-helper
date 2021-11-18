@@ -6,7 +6,7 @@
 	<groupId>com.pugwoo</groupId>
 	<artifactId>redis-helper</artifactId>
 	<packaging>jar</packaging>
-	<version>1.1.1</version>
+	<version>1.1.2</version>
 	
 	<name>redis-helper</name>
 	<description>a useful redis client with interesting feature</description>
@@ -15,7 +15,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <spring.version>5.3.8</spring.version>
+        <spring.version>5.3.9</spring.version>
 	</properties>
 	
     <developers>
@@ -44,28 +44,28 @@
         <dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
-			<version>1.7.31</version>
+			<version>1.7.32</version>
 		</dependency>
 
         <!-- json相关功能 -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.12.4</version>
+            <version>2.12.5</version>
         </dependency>
 
         <!-- 脚本动态相关功能 -->
         <dependency>
             <groupId>org.mvel</groupId>
             <artifactId>mvel2</artifactId>
-            <version>2.4.12.Final</version>
+            <version>2.4.13.Final</version>
         </dependency>
 
         <!-- Redis相关功能需要 -->
         <dependency>
             <groupId>redis.clients</groupId>
             <artifactId>jedis</artifactId>
-            <version>3.6.1</version>
+            <version>3.7.0</version>
         </dependency>
 
 		<!-- optional依赖： Redis的分布式锁注解方式使用时，需要该依赖，实际上依赖Spring容器-->
@@ -104,7 +104,7 @@
         <dependency>
             <groupId>com.pugwoo</groupId>
             <artifactId>woo-utils</artifactId>
-            <version>1.0.4</version>
+            <version>1.0.5</version>
             <scope>test</scope>
         </dependency>
 		
