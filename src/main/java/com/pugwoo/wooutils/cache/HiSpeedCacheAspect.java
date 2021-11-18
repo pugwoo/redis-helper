@@ -16,11 +16,7 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -103,16 +99,10 @@ public class HiSpeedCacheAspect implements InitializingBean {
         HiSpeedCache hiSpeedCache = targetMethod.getAnnotation(HiSpeedCache.class);
         boolean useRedis = checkUseRedis(hiSpeedCache);
 
-        Class<?>[] genericClasses = null;
+        ParameterizedType type = null;
         Type genericReturnType = targetMethod.getGenericReturnType();
         if (genericReturnType instanceof ParameterizedType) { // 当返回参数有泛型时，才会是这个类型
-            Type[] actualTypeArguments = ((ParameterizedType) genericReturnType).getActualTypeArguments();
-            if (actualTypeArguments != null || actualTypeArguments.length > 0) {
-                genericClasses = new Class[actualTypeArguments.length];
-                for (int i = 0; i < actualTypeArguments.length; i++) {
-                    genericClasses[i] = (Class<?>) actualTypeArguments[i];
-                }
-            }
+            type = (ParameterizedType) genericReturnType;
         }
 
         String key;
@@ -137,13 +127,13 @@ public class HiSpeedCacheAspect implements InitializingBean {
             if (cacheRedisData) {
                 Object cacheData = getCacheData(cacheKey);
                 if (cacheData != null) {
-                    return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, genericClasses);
+                    return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, type);
                 }
             }
 
             String value = redisHelper.getString(cacheKey);
             if(value != null) { // == null则缓存没命中，应该走下面调用逻辑
-                Object result = NULL_VALUE.equals(value) ? null : parseJson(value, targetMethod, genericClasses);
+                Object result = NULL_VALUE.equals(value) ? null : parseJson(value, targetMethod, type);
                 if (cacheRedisData) { // 缓存到本地
                     putCacheData(cacheKey, result == null ? NULL_VALUE : result,
                             cacheRedisDataMillisecond + System.currentTimeMillis());
@@ -153,7 +143,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
         } else {
             Object cacheData = getCacheData(cacheKey);
             if (cacheData != null) {
-                return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, genericClasses);
+                return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, type);
             }
         }
 
@@ -207,7 +197,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
         if (useRedis && !cacheRedisData) {
             return ret;
         } else {
-            return processClone(hiSpeedCache, ret, genericClasses);
+            return processClone(hiSpeedCache, ret, type);
         }
     }
 
@@ -317,18 +307,18 @@ public class HiSpeedCacheAspect implements InitializingBean {
     }
 
     /**解析json为object*/
-    private Object parseJson(String value, Method targetMethod, Class<?>... genericClasses) {
+    private Object parseJson(String value, Method targetMethod, ParameterizedType type) {
         Class<?> returnClazz = targetMethod.getReturnType();
 
-        if (genericClasses == null || genericClasses.length == 0) {
+        if (type == null) {
             return JsonRedisObjectConverter.parse(value, returnClazz);
         } else {
-            return JsonRedisObjectConverter.parse(value, returnClazz, genericClasses);
+            return JsonRedisObjectConverter.parse(value, type);
         }
     }
     
     /*处理结果值克隆的问题*/
-    private Object processClone(HiSpeedCache hiSpeedCache, Object data, Class<?>... genericClasses) {
+    private Object processClone(HiSpeedCache hiSpeedCache, Object data, ParameterizedType type) {
         if(data == null) {
             return null;
         }
@@ -339,10 +329,10 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 return data;
             }
 
-            if (genericClasses == null || genericClasses.length == 0) {
+            if (type == null) {
                 return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
             } else {
-                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz, genericClasses);
+                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
             }
         } else {
             return data;
