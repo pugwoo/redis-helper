@@ -1,3 +1,6 @@
+v1.1.3
+- [enhance] RedisHelper的compareAndSet使用lua脚本实现
+
 2021年11月18日
 v1.1.2
 - [enhance] RedisHelper的getObject方法支持嵌套泛型；增加getObjects支持泛型的方法

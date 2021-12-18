@@ -24,12 +24,50 @@ public class RedisHelperImpl implements RedisHelper {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedisHelperImpl.class);
 	
 	/**
-	 * 删除key-value的lua脚本
-	 * 返回 1 成功 删除1个
-	 *     0  失败 删除0个 key不存在 / key-value不匹配 / key-value匹配后刚好失效
+	 * 删除key-value的lua脚本 <br>
+	 *
+	 * params: <br>
+	 *     KEYS1: 被操作的redis key <br>
+	 *     ARGV1: key对应的值      <br>
+	 *
+	 * return: <br>
+	 *     1: 成功 删除1个 <br>
+	 *     0: 失败 删除0个 (key不存在 / key-value不匹配 / key-value匹配后刚好失效) <br>
 	 */
 	private final static String REMOVE_KEY_VALUE_SCRIPT =
 			"if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+	
+	/**
+	 * lua脚本 CAS <br>
+	 *
+	 * params: <br>
+	 *     KEYS1: 被操作的redis key<br>
+	 *     ARGV1: 新的value<br>
+	 *     ARGV2: 旧的value 只有旧value等于现有的value时，才会被设置<br>
+	 *
+	 * return: <br>
+	 *     1 设置成功 <br>
+	 *     0 设置失败 旧的value校验失败 <br>
+	 */
+	String COMPARE_AND_SET_SCRIPT = "" +
+			"if redis.call('get', KEYS[1]) == ARGV[2] then redis.call('set', KEYS[1], ARGV[1]); return 1 else return 0 end";
+	
+	/**
+	 * lua脚本 CAS并重设过期时间 <br>
+	 *
+	 * params: <br>
+	 *     KEYS1: 被操作的redis key<br>
+	 *     ARGV1: 新的value<br>
+	 *     ARGV2: 旧的value 只有旧value等于现有的value时，才会被设置<br>
+	 *     ARGV3: 过期时间，必须为一个合法的过期时间
+	 *
+	 * return: <br>
+	 *     1 设置成功 <br>
+	 *     0 设置失败 旧的value校验失败 <br>
+	 */
+	String COMPARE_AND_SET_EXPIRE_SCRIPT =
+			"if redis.call('get', KEYS[1]) == ARGV[2] then redis.call('setex', KEYS[1], ARGV[3], ARGV[1]); return 1 else return 0 end";
+	
 	
 	/**约定：当host为null或blank时，表示不初始化*/
 	protected String host = null;
@@ -515,30 +553,25 @@ public class RedisHelperImpl implements RedisHelper {
 			return false;
 		}
 		
+		boolean expire = expireSeconds != null && expireSeconds >= 0;
+		
+		// 如果旧值为null，则当做setnx处理，但是不支持setnx时不指定过期时间
+		if (oldValue == null) {
+			if (expire) {
+				return setStringIfNotExist(key, expireSeconds, value);
+			} else {
+				return false;
+			}
+		}
+		
 		return execute(jedis -> {
 			try {
-				jedis.watch(key);
-				String readOldValue = jedis.get(key);
-				if(Objects.equals(readOldValue, oldValue)) {
-					Transaction tx = jedis.multi();
-					Response<String> result = null;
-					if(expireSeconds != null && expireSeconds >= 0) {
-						result = tx.setex(key, expireSeconds, value);
-					} else {
-						result = tx.set(key, value);
-					}
-
-					List<Object> results = tx.exec();
-					if(results == null || result == null || result.get() == null) {
-						return false;
-					} else {
-						return true;
-					}
-				} else {
-					return false;
-				}
+				Object eval = expire
+						? jedis.eval(COMPARE_AND_SET_EXPIRE_SCRIPT, 1, key, value, oldValue, expireSeconds.toString())
+						: jedis.eval(COMPARE_AND_SET_SCRIPT, 1, key, value, oldValue);
+				return "1".equals(eval.toString());
 			} catch (Exception e) {
-				LOGGER.error("compareAndSet error,key:{}, value:{}, oldValue:{}", key, value, oldValue);
+				LOGGER.error("compareAndSet error,key:{}, value:{}, oldValue:{}", key, value, oldValue, e);
 				return false;
 			}
 		});

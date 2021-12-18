@@ -213,7 +213,9 @@ public interface RedisHelper {
 	/**
 	 * CAS，成功返回true，失败返回false。
 	 * 注意：在高并发场景下，过多线程使用该方法将导致过多无用的重试，从而大幅降低性能。
-	 * @param value 不支持设置为null，请使用remove(key, oldValue)
+	 * @param key   key
+	 * @param value 不支持设置为null，请使用 {@link #remove(String, String)}
+	 * @param oldValue 旧的value 如果该值为null，则expireSeconds必须提供且>=0
 	 * @param expireSeconds 超时时间，如果是null，则等于不改变，原来是多少秒就多少秒
 	 */
 	boolean compareAndSet(String key, String value, String oldValue, Integer expireSeconds);
