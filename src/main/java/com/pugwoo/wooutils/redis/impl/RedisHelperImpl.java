@@ -560,6 +560,7 @@ public class RedisHelperImpl implements RedisHelper {
 			if (expire) {
 				return setStringIfNotExist(key, expireSeconds, value);
 			} else {
+				LOGGER.error("compareAndSet expireSeconds must >= 0 if oldValue is null");
 				return false;
 			}
 		}
