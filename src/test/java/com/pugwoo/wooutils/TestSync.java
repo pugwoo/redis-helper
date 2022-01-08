@@ -100,6 +100,39 @@ public class TestSync {
 	}
 	
 	@Test
+	public void testHelloByDefaultNamespace() throws Exception {
+		List<Thread> thread = new ArrayList<>();
+		
+		long start = System.currentTimeMillis();
+		
+		for(int i = 1; i <= 10; i++) {
+			final int a = i;
+			Thread t = new Thread(() -> {
+				try {
+					do {
+						helloService.helloByDefaultNamespace("nick", a);
+						System.out.println("线程" + a +
+								"执行结果详情: 是否执行了方法:" + RedisSyncContext.getHaveRun());
+					} while (!RedisSyncContext.getHaveRun());
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			});
+			t.start();
+			thread.add(t);
+		}
+		
+		for(Thread t : thread) {
+			t.join();
+		}
+		
+		long end = System.currentTimeMillis();
+		assert end - start >= 10000;
+		assert end - start <= 19000;
+		
+	}
+	
+	@Test
 	public void testNotThrowIfNotGetLock() throws InterruptedException {
 		// 先跑一下，其初次执行大约占了两秒时间，导致后面校验时的时间不对
 		// redis操作加锁的时候会生成随机的value

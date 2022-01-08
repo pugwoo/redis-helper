@@ -1,3 +1,6 @@
+v1.1.4
+- [enhance] Synchronized注解参数namespace支持默认值，不指定时使用全限定类名+方法签名
+
 2021年12月19日
 v1.1.3
 - [enhance] RedisHelper的compareAndSet使用lua脚本实现

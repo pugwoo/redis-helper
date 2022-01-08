@@ -63,6 +63,10 @@ public class RedisSyncAspect implements InitializingBean {
 		Synchronized sync = targetMethod.getAnnotation(Synchronized.class);
 		
 		String namespace = sync.namespace();
+		if (namespace.trim().isEmpty()) {
+			namespace = generateNamespace(targetMethod);
+		}
+		
 		int expireSecond = sync.expireSecond();
 		int heartbeatExpireSecond = sync.heartbeatExpireSecond();
 		int waitLockMillisecond = sync.waitLockMillisecond();
@@ -215,5 +219,26 @@ public class RedisSyncAspect implements InitializingBean {
 			}
 		}
 	}
-
+	
+	/**
+	 * 生成缓存最终的
+	 * key*/
+	private String generateNamespace(Method method) {
+		String clazzName = method.getDeclaringClass().getName();
+		String methodName = method.getName();
+		Class<?>[] parameterTypes = method.getParameterTypes();
+		return clazzName + "." + methodName + ":" + toString(parameterTypes);
+	}
+	
+	/**将参数类型转换成字符串*/
+	private static String toString(Class<?>[] parameterTypes) {
+		if(parameterTypes == null || parameterTypes.length == 0) {
+			return "";
+		}
+		StringBuilder sb = new StringBuilder();
+		for(Class<?> clazz : parameterTypes) {
+			sb.append(clazz.getName()).append(",");
+		}
+		return sb.substring(0, sb.length() - 1);
+	}
 }
