@@ -1,6 +1,7 @@
 package com.pugwoo.wooutils.redis;
 
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
+import com.pugwoo.wooutils.utils.ClassUtil;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -224,21 +225,7 @@ public class RedisSyncAspect implements InitializingBean {
 	 * 生成缓存最终的
 	 * key*/
 	private String generateNamespace(Method method) {
-		String clazzName = method.getDeclaringClass().getName();
-		String methodName = method.getName();
-		Class<?>[] parameterTypes = method.getParameterTypes();
-		return clazzName + "." + methodName + ":" + toString(parameterTypes);
+		return ClassUtil.getMethodSignatureWithClassName(method);
 	}
 	
-	/**将参数类型转换成字符串*/
-	private static String toString(Class<?>[] parameterTypes) {
-		if(parameterTypes == null || parameterTypes.length == 0) {
-			return "";
-		}
-		StringBuilder sb = new StringBuilder();
-		for(Class<?> clazz : parameterTypes) {
-			sb.append(clazz.getName()).append(",");
-		}
-		return sb.substring(0, sb.length() - 1);
-	}
 }

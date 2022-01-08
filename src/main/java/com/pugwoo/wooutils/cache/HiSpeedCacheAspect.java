@@ -2,6 +2,7 @@ package com.pugwoo.wooutils.cache;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
+import com.pugwoo.wooutils.utils.ClassUtil;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -113,7 +114,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                     hiSpeedCache.keyScript(), JsonRedisObjectConverter.toJson(pjp.getArgs()));
             return pjp.proceed(); // 出现异常则等价于不使用缓存，直接调方法
         }
-        String cacheKey = generateCacheKey(pjp, key);
+        String cacheKey = generateCacheKey(targetMethod, key);
 
         renewFetchExpire(pjp, hiSpeedCache, cacheKey);
         
@@ -239,14 +240,9 @@ public class HiSpeedCacheAspect implements InitializingBean {
     }
 
     /**生成缓存最终的key*/
-    private String generateCacheKey(ProceedingJoinPoint pjp, String key) {
-        MethodSignature signature = (MethodSignature) pjp.getSignature();
-        Method targetMethod = signature.getMethod();
-        String clazzName = signature.getDeclaringType().getName();
-        String methodName = targetMethod.getName();
-        Class<?>[] parameterTypes = targetMethod.getParameterTypes();
-        return "HSC:" + clazzName + "." + methodName + ":"
-                + toString(parameterTypes) + (key.isEmpty() ? "" : ":" + key);
+    private String generateCacheKey(Method targetMethod, String key) {
+        String methodSignatureWithClassName = ClassUtil.getMethodSignatureWithClassName(targetMethod);
+        return "HSC:" + methodSignatureWithClassName + (key.isEmpty() ? "" : ":" + key);
     }
 
     private String generateKey(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache) {
@@ -555,18 +551,6 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 }
             }
         }
-    }
-
-    /**将参数类型转换成字符串*/
-    private static String toString(Class<?>[] parameterTypes) {
-        if(parameterTypes == null || parameterTypes.length == 0) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        for(Class<?> clazz : parameterTypes) {
-            sb.append(clazz.getName()).append(",");
-        }
-        return sb.substring(0, sb.length() - 1);
     }
 
     private static class MyThreadFactory implements ThreadFactory {
