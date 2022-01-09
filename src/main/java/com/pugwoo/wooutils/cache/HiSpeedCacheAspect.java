@@ -2,7 +2,7 @@ package com.pugwoo.wooutils.cache;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
-import com.pugwoo.wooutils.utils.ClassUtil;
+import com.pugwoo.wooutils.utils.ClassUtils;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -241,7 +241,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     /**生成缓存最终的key*/
     private String generateCacheKey(Method targetMethod, String key) {
-        String methodSignatureWithClassName = ClassUtil.getMethodSignatureWithClassName(targetMethod);
+        String methodSignatureWithClassName = ClassUtils.getMethodSignatureWithClassName(targetMethod);
         return "HSC:" + methodSignatureWithClassName + (key.isEmpty() ? "" : ":" + key);
     }
 
