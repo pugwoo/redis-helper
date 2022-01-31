@@ -2,6 +2,7 @@ package com.pugwoo.wooutils.cache;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
+import com.rits.cloning.Cloner;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -34,6 +35,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
      * 缓存null值是避免缓存穿透
      **/
     private static final String NULL_VALUE = "(NULL)HiSpeedCache@DpK3GovAptNICKAndKarenXSysudYrY";
+
+    private Cloner cloner = new Cloner();
 
     @Autowired(required = false)
     private RedisHelper redisHelper;
@@ -329,10 +332,16 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 return data;
             }
 
-            if (type == null) {
-                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
-            } else {
-                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
+            // 优先使用kostaskougios cloning工具进行克隆，其性能是json的将近10倍
+            try {
+                return cloner.deepClone(data);
+            } catch (Throwable e) {
+                // 如果克隆失败，则尝试用json进行克隆
+                if (type == null) {
+                    return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
+                } else {
+                    return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
+                }
             }
         } else {
             return data;

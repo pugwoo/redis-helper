@@ -1,3 +1,6 @@
+v1.2.0
+- [enhance] 使用fastclone提高高速缓存的对象克隆性能，约提高10倍(10万条记录的list由1.5秒降到150毫秒)
+
 2021年11月18日
 v1.1.2
 - [enhance] RedisHelper的getObject方法支持嵌套泛型；增加getObjects支持泛型的方法
