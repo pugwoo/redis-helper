@@ -136,15 +136,16 @@ public class TestRedisHelper {
 	public void testCAS() {
 		String key = UUID.randomUUID().toString();
 		String value = UUID.randomUUID().toString();
+		// value = null;
 
 		redisHelper.setString(key, 60, value);
 
-		redisHelper.compareAndSet(key, "111", value, 30);
+		assert redisHelper.compareAndSet(key, "111", value, 30);
 
-		assert redisHelper.getString(key).equals("111");
+		assert "111".equals(redisHelper.getString(key));
 		assert redisHelper.getExpireSecond(key) > 25 && redisHelper.getExpireSecond(key) <= 30;
-
-		redisHelper.compareAndSet(key, "111", value, null);
+	
+		assert !redisHelper.compareAndSet(key, "111", value, null);
 	}
 
 	@Test

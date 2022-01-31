@@ -1,6 +1,7 @@
 package com.pugwoo.wooutils.redis;
 
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
+import com.pugwoo.wooutils.utils.ClassUtils;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -63,6 +64,10 @@ public class RedisSyncAspect implements InitializingBean {
 		Synchronized sync = targetMethod.getAnnotation(Synchronized.class);
 		
 		String namespace = sync.namespace();
+		if (namespace.trim().isEmpty()) {
+			namespace = generateNamespace(targetMethod);
+		}
+		
 		int expireSecond = sync.expireSecond();
 		int heartbeatExpireSecond = sync.heartbeatExpireSecond();
 		int waitLockMillisecond = sync.waitLockMillisecond();
@@ -215,5 +220,12 @@ public class RedisSyncAspect implements InitializingBean {
 			}
 		}
 	}
-
+	
+	/**
+	 * 生成缓存最终的
+	 * key*/
+	private String generateNamespace(Method method) {
+		return ClassUtils.getMethodSignatureWithClassName(method);
+	}
+	
 }
