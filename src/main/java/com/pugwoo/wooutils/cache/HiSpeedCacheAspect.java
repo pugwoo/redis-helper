@@ -37,6 +37,9 @@ public class HiSpeedCacheAspect implements InitializingBean {
      **/
     private static final String NULL_VALUE = "(NULL)HiSpeedCache@DpK3GovAptNICKAndKarenXSysudYrY";
 
+    // 记录快速克隆的失败次数
+    private final Integer FAST_CLONE_FAIL_THRESHOLD = 10;
+    private AtomicInteger fastCloneFailCount = new AtomicInteger();
     private Cloner cloner = new Cloner();
 
     @Autowired(required = false)
@@ -328,17 +331,34 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 return data;
             }
 
-            // 优先使用kostaskougios cloning工具进行克隆，其性能是json的将近10倍
-            try {
-                return cloner.deepClone(data);
-            } catch (Throwable e) {
-                // 如果克隆失败，则尝试用json进行克隆
+            if (fastCloneFailCount.get() > FAST_CLONE_FAIL_THRESHOLD) {
                 if (type == null) {
                     return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
                 } else {
                     return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
                 }
+            } else {
+                // 优先使用kostaskougios cloning工具进行克隆，其性能是json的将近10倍
+                try {
+                    return cloner.deepClone(data);
+                } catch (Throwable e) {
+                    int failCount = fastCloneFailCount.incrementAndGet();
+                    if (failCount > FAST_CLONE_FAIL_THRESHOLD) {
+                        LOGGER.warn("fastclone fail more than {} times, will disable fastclone, failCount:{}",
+                                FAST_CLONE_FAIL_THRESHOLD, failCount, e);
+                    } else {
+                        LOGGER.warn("fastclone fail, will try use json clone, failCount:{}", failCount, e);
+                    }
+
+                    // 如果克隆失败，则尝试用json进行克隆
+                    if (type == null) {
+                        return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
+                    } else {
+                        return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
+                    }
+                }
             }
+
         } else {
             return data;
         }

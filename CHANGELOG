@@ -1,3 +1,6 @@
+2022年2月14日
+v1.1.6 - [enhance] 当使用jdk9及以上的版本时，可能因为illegal-access导致fastclone失败，此时自动降级为json克隆
+
 2022年1月31日
 v1.1.5 - [enhance] 使用fastclone提高高速缓存的对象克隆性能，约提高10倍(10万条记录的list由1000毫秒降到140毫秒)
 
