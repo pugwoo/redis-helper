@@ -113,4 +113,9 @@ public class WithCacheDemoService {
         return UUID.randomUUID().toString();
     }
 
+    // 有参数，但是keyScript为空，应该打印出log告警
+    @HiSpeedCache(expireSecond = 10, keyScript = "")
+    public String withParam(String param) {
+        return param;
+    }
 }

@@ -39,8 +39,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     // 记录快速克隆的失败次数
     private final Integer FAST_CLONE_FAIL_THRESHOLD = 10;
-    private AtomicInteger fastCloneFailCount = new AtomicInteger();
-    private Cloner cloner = new Cloner();
+    private final AtomicInteger fastCloneFailCount = new AtomicInteger();
+    private final Cloner cloner = new Cloner();
 
     @Autowired(required = false)
     private RedisHelper redisHelper;
@@ -262,6 +262,12 @@ public class HiSpeedCacheAspect implements InitializingBean {
             Object result = MVEL.eval(keyScript, context);
             if (result != null) { // 返回结果为null等价于keyScript为空字符串
                 key = result.toString();
+            }
+        } else {
+            // 当keyScript没有设置，而方法的参数的个数又不是0个时，打印告警日志，这种情况一般是有问题的
+            if (pjp.getArgs() != null && pjp.getArgs().length > 0) {
+                LOGGER.warn("HiSpeedCache keyScript is empty, while method args size is bigger than zero, method:{}",
+                        ((MethodSignature) pjp.getSignature()).getMethod().getName());
             }
         }
 

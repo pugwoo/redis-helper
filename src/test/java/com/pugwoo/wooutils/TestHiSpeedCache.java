@@ -286,4 +286,9 @@ public class TestHiSpeedCache {
         }
 
     }
+
+    @Test
+    public void testWarningLog() {
+        withCacheDemoService.withParam("hi");
+    }
 }
