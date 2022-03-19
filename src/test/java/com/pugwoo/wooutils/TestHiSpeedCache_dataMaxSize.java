@@ -135,10 +135,10 @@ public class TestHiSpeedCache_dataMaxSize {
         Thread.sleep(3000);  // 14 second
         System.out.println(withCacheDemoService.getSomethingWithCacheCount());
         assert withCacheDemoService.getSomethingWithCacheCount() == 7;
-        Thread.sleep(3000);  // 17 second
+        Thread.sleep(3500);  // 17.5 second // 原来是sleep 3000，但是17秒过于精确，这里调成17.5秒
         System.out.println(withCacheDemoService.getSomethingWithCacheCount());
         assert withCacheDemoService.getSomethingWithCacheCount() == 8;
-        Thread.sleep(3000);  // 20 second
+        Thread.sleep(2500);  // 20 second
         System.out.println(withCacheDemoService.getSomethingWithCacheCount());
         assert withCacheDemoService.getSomethingWithCacheCount() == 8;
         Thread.sleep(3000);  // 20 second
