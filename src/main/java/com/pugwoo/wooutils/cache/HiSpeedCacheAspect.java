@@ -121,7 +121,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private volatile CleanExpireDataTask cleanThread = null;   // 不需要多线程
     private volatile ContinueUpdateTask continueThread = null; // 不需要多线程
 
-    private static final Map<String, Boolean> concurrentFetchControl = new ConcurrentHashMap<>(); // 控制fetch的并发执行
+    private final Map<String, Boolean> concurrentFetchControl = new ConcurrentHashMap<>(); // 控制fetch的并发执行
 
     @Around("@annotation(com.pugwoo.wooutils.cache.HiSpeedCache) execution(* *.*(..))")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
