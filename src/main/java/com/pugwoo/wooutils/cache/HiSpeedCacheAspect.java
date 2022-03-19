@@ -2,8 +2,8 @@ package com.pugwoo.wooutils.cache;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
-import com.rits.cloning.Cloner;
 import com.pugwoo.wooutils.utils.ClassUtils;
+import com.rits.cloning.Cloner;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -18,7 +18,13 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -58,17 +64,35 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private final ExecutorService executorService;
 
     public HiSpeedCacheAspect() {
-        executorService = Executors.newFixedThreadPool(10,
-                new MyThreadFactory("HiSpeedCache-update-thread"));
+        this(10);
     }
 
     /**
-     *
      * @param nUpdateThreads 指定数据任务的线程数
      */
     public HiSpeedCacheAspect(int nUpdateThreads) {
+        this(nUpdateThreads, 0);
+    }
+    
+    /**
+     * @param nUpdateThreads 指定数据任务的线程数
+     * @param dataMaxSize 存储数据对象的最大数量。大于0时生效；
+     *                    当未限制存储对象最大数量时，使用ConcurrentHashMap进行存储，可以获得更好的性能；
+     *                    当限制存储对象最大数量时，达到上限将使用LRU策略清理。
+     */
+    public HiSpeedCacheAspect(int nUpdateThreads, int dataMaxSize) {
         executorService = Executors.newFixedThreadPool(nUpdateThreads,
                 new MyThreadFactory("HiSpeedCache-update-thread"));
+        if (dataMaxSize > 0) {
+            dataMap = Collections.synchronizedMap(new LinkedHashMap<String, Object>(dataMaxSize + 1, 1.0f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Object> eldest) {
+                    return size() > dataMaxSize;
+                }
+            });
+        } else {
+            dataMap = new ConcurrentHashMap<>();
+        }
     }
 
     private static class ContinueFetchDTO {
@@ -87,17 +111,17 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     // 特别注意，因为expireLineMap和fetchLineMap不是线程安全，下面实现对其进行了synchronized，已经确认之间没有循环加锁，避免掉死锁的可能
 
-    private static final Map<String, Object> dataMap = new ConcurrentHashMap<>(); // 存缓存数据的
-    private static final Map<Long, List<String>> expireLineMap = new TreeMap<>(); // 存数据超时时间的，超时时间 -> 对应于该超时时间的key的列表
-    private static final Map<String, Long> keyExpireMap = new ConcurrentHashMap<>(); // 每个key的超时时间，key -> 超时时间
+    private final Map<String, Object> dataMap;                                // 存缓存数据的
+    private final Map<Long, List<String>> expireLineMap = new TreeMap<>();    // 存数据超时时间的，超时时间 -> 对应于该超时时间的key的列表
+    private final Map<String, Long> keyExpireMap = new ConcurrentHashMap<>(); // 每个key的超时时间，key -> 超时时间
 
-    private static final Map<String, ContinueFetchDTO> keyContinueFetchMap = new ConcurrentHashMap<>(); // 每个key持续更新的信息
-    private static final Map<Long, List<String>> fetchLineMap = new TreeMap<>(); // 持续获取的时间线，里面只有每个key的最近一次获取时间
+    private final Map<String, ContinueFetchDTO> keyContinueFetchMap = new ConcurrentHashMap<>(); // 每个key持续更新的信息
+    private final Map<Long, List<String>> fetchLineMap = new TreeMap<>();     // 持续获取的时间线，里面只有每个key的最近一次获取时间
 
-    private static volatile CleanExpireDataTask cleanThread = null; // 不需要多线程
-    private static volatile ContinueUpdateTask continueThread = null; // 不需要多线程
+    private volatile CleanExpireDataTask cleanThread = null;   // 不需要多线程
+    private volatile ContinueUpdateTask continueThread = null; // 不需要多线程
 
-    private static final Map<String, Boolean> concurrentFetchControl = new ConcurrentHashMap<>(); // 控制fetch的并发执行
+    private final Map<String, Boolean> concurrentFetchControl = new ConcurrentHashMap<>(); // 控制fetch的并发执行
 
     @Around("@annotation(com.pugwoo.wooutils.cache.HiSpeedCache) execution(* *.*(..))")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
@@ -371,7 +395,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
     }
 
     /**设置或修改cacheKey的超时时间，保证一个cacheKey只有一个超时时间*/
-    private static void changeKeyExpireTime(String cacheKey, long expireTime) {
+    private void changeKeyExpireTime(String cacheKey, long expireTime) {
         synchronized (expireLineMap) {
             Long oldExpireTime = keyExpireMap.get(cacheKey);
             if (oldExpireTime != null) { // 清理可能的老数据
@@ -402,7 +426,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
     }
 
     /**将某个cacheKey的下一次获取加入到更新时间线中*/
-    private static void addFetchToTimeLine(long nextTime, String cacheKey) {
+    private void addFetchToTimeLine(long nextTime, String cacheKey) {
         synchronized (fetchLineMap) {
 
             // 检查一下cacheKey是否已经存在于刷新线中，如果已经存在，则不再加入

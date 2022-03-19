@@ -14,9 +14,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-@ContextConfiguration(locations = {"classpath:applicationContext-context.xml"})
+@ContextConfiguration(locations = {"classpath:applicationContext-context-HiSpeedCache-dataMaxSize.xml"})
 @RunWith(SpringJUnit4ClassRunner.class)
-public class TestHiSpeedCache {
+public class TestHiSpeedCache_dataMaxSize {
 
     @Autowired
     private WithCacheDemoService withCacheDemoService;
