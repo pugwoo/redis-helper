@@ -6,7 +6,7 @@
 	<groupId>com.pugwoo</groupId>
 	<artifactId>redis-helper</artifactId>
 	<packaging>jar</packaging>
-	<version>1.1.8-SNAPSHOT</version>
+	<version>1.2.0</version>
 
 	<name>redis-helper</name>
 	<description>a useful redis client with interesting feature</description>
