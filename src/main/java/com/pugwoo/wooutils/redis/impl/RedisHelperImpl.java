@@ -111,19 +111,10 @@ public class RedisHelperImpl implements RedisHelper {
 			}
 		}
 		if(pool == null) {return null;}
-		Jedis jedis = null;
 		try {
-			jedis = pool.getResource();
-			return jedis;
+			return pool.getResource();
 		} catch (Exception e) {
 			LOGGER.error("redis get jedis fail", e);
-			if(jedis != null) {
-				try {
-					jedis.close();
-				} catch (Exception ex) {
-					LOGGER.error("close jedis fail", ex);
-				}
-			}
 			throw new NoJedisConnectionException(e);
 		}
 	}
