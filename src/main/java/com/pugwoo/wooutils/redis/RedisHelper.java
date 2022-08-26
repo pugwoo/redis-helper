@@ -16,44 +16,40 @@ public interface RedisHelper {
 
 	/**
 	 * 获得redisHelper的对象转换器
-	 * @return
 	 */
 	IRedisObjectConverter getRedisObjectConverter();
 
 	/**
 	 * 检查redis是否已经准备就绪，包括ip端口、密码等是否已经正确，服务器端是否已经正常ping-pong
-	 * @return
 	 */
 	boolean isOk();
 
 	/**
 	 * 传入jedis，然后自行实现逻辑，最后会自动关闭jedis资源。
-	 * 
+	 * <p>
 	 * 该方法用于替换原来getJedisConnection方法
 	 * 
-	 * @param jedisToFunc
+	 * @param jedisToFunc 执行redis操作
 	 * @return 返回jedisToFunc的返回值
 	 */
 	<R> R execute(Function<Jedis, R> jedisToFunc);
 	
 	/**
 	 * 按顺序执行pipeline，返回所有执行的结果列表
-	 * @param pipeline
-	 * @return
+	 * @param pipeline 执行redis操作
 	 */
 	List<Object> executePipeline(Consumer<Pipeline> pipeline);
 	
 	/**
 	 * 执行redis事务，keys是需要watch的key
-	 * @param transaction
-	 * @param keys
-	 * @return
+	 * @param transaction 执行redis操作
+	 * @param keys watch的key
 	 */
 	List<Object> executeTransaction(Consumer<Transaction> transaction, String ...keys);
 
 	/**
 	 * 重命名redis的key
-	 * @param oldKey
+	 * @param oldKey 原key
 	 * @param newKey 如果newKey已存在，会覆盖掉
 	 * @return 除非抛出异常，否则认为成功；不处理oldKey不存在的情况，认为是成功
 	 */
