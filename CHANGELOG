@@ -1,3 +1,4 @@
+2022年8月26日
 v1.2.1 - [enhance] redis支持设置参数testOnBorrow并默认设置为true，支持设置timeout(默认2秒)/testOnReturn(默认false)
        - [upgrade] maven依赖升级jedis为3.9.0
 
