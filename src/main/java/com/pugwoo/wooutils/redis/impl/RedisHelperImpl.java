@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.*;
 import redis.clients.jedis.params.SetParams;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -77,6 +78,9 @@ public class RedisHelperImpl implements RedisHelper {
 	private String password = null;
 	/**指定0~15哪个redis库*/
 	private Integer database = 0;
+	private boolean testOnBorrow = true;
+	/**连接和读超时的毫秒数，由于redis性能非常高，这里没必要区分是连接超时还是读超时了*/
+	private Duration timeout = Duration.ofMillis(2000);
 	/**String和Object之间的转换对象*/
 	private IRedisObjectConverter redisObjectConverter;
 	
@@ -94,17 +98,15 @@ public class RedisHelperImpl implements RedisHelper {
 				if(pool == null && host != null && !host.trim().isEmpty()) {
 					JedisPoolConfig poolConfig = new JedisPoolConfig();
 					poolConfig.setMaxTotal(maxConnection); // 最大链接数
-					poolConfig.setMaxIdle(64);
-					poolConfig.setMaxWaitMillis(1000L);
-					poolConfig.setTestOnBorrow(false);
-					poolConfig.setTestOnReturn(false);
-					
+					poolConfig.setTestOnBorrow(testOnBorrow);
+					poolConfig.setMaxWait(timeout);
+
 					if(password != null && password.trim().isEmpty()) {
 						password = null;
 					}
 					
-					pool = new JedisPool(poolConfig, host, Integer.valueOf(port),
-							Protocol.DEFAULT_TIMEOUT, password, database);
+					pool = new JedisPool(poolConfig, host, port,
+							(int) timeout.toMillis(), password, database);
 				}
 			}
 		}
@@ -730,6 +732,23 @@ public class RedisHelperImpl implements RedisHelper {
 		if(database != null && database >= 0) {
 			this.database = database;
 		}
+	}
+
+	public boolean isTestOnBorrow() {
+		return testOnBorrow;
+	}
+
+	public void setTestOnBorrow(boolean testOnBorrow) {
+		this.testOnBorrow = testOnBorrow;
+	}
+
+	public Duration getTimeout() {
+		return timeout;
+	}
+
+	/**设置超时时间，由于redis性能很高，这里没必要区分是读超时还是连接超时了，默认是2000毫秒*/
+	public void setTimeout(Duration timeout) {
+		this.timeout = timeout;
 	}
 
 	@Override
