@@ -1,3 +1,7 @@
+2022年8月26日
+v1.2.1 - [enhance] redis支持设置参数testOnBorrow并默认设置为true，支持设置timeout(默认2秒)/testOnReturn(默认false)
+       - [upgrade] maven依赖升级jedis为3.9.0
+
 2022年3月19日
 v1.2.0 - [add] 高速缓存本地存储对象支持设置最大存储量，超过后采用LRU策略清理
 
