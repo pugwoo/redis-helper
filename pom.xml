@@ -8,8 +8,8 @@
 	<version>0.0.1-SNAPSHOT</version>
 
 	<modules>
-        <module>source</module>
-        <module>tests</module>
+        <module>redis-helper</module>
+        <module>redis-helper-test</module>
 	</modules>
 
 </project>
