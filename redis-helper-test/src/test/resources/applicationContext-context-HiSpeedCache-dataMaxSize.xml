@@ -7,8 +7,10 @@
 	                    http://www.springframework.org/schema/context
 	                    http://www.springframework.org/schema/context/spring-context-4.2.xsd">
 
-	<!-- 支持注解注入 -->
-	<context:component-scan base-package="com.pugwoo" />
+	<!-- 特别说明：这里用于测试一些只能独立开来的容器特性 -->
+	<!-- 特别注意：这里不要用自动扫描，因为其它代码有自动扫描的注解，容易冲突 -->
+
+	<bean id="withCacheDemoService" class="com.pugwoo.redishelpertest.cache.WithCacheDemoService" />
 
 	<!-- redis -->
 	<bean id="redisHelper" class="com.pugwoo.wooutils.redis.impl.RedisHelperImpl">

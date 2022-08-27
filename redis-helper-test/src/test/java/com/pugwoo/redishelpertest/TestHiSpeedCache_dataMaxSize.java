@@ -1,21 +1,17 @@
-package com.pugwoo.wooutils;
+package com.pugwoo.redishelpertest;
 
-import com.pugwoo.wooutils.cache.WithCacheDemoService;
+import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
 import com.pugwoo.wooutils.json.JSON;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @ContextConfiguration(locations = {"classpath:applicationContext-context-HiSpeedCache-dataMaxSize.xml"})
-@RunWith(SpringJUnit4ClassRunner.class)
+@ExtendWith(SpringExtension.class)
 public class TestHiSpeedCache_dataMaxSize {
 
     @Autowired
