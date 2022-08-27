@@ -1,5 +1,6 @@
-package com.pugwoo.wooutils.cache;
+package com.pugwoo.redishelperbenchmark.cache;
 
+import com.pugwoo.wooutils.cache.HiSpeedCache;
 import org.springframework.stereotype.Service;
 
 import java.text.SimpleDateFormat;

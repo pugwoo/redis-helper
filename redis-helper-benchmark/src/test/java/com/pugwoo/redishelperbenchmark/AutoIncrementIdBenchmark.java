@@ -1,11 +1,9 @@
-package com.pugwoo.wooutils.benchmark;
+package com.pugwoo.redishelperbenchmark;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.HashSet;
 import java.util.List;
@@ -26,8 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author NICK
  *
  */
-@ContextConfiguration(locations = {"classpath:applicationContext-context.xml"})
-@RunWith(SpringJUnit4ClassRunner.class)
+@SpringBootTest
 public class AutoIncrementIdBenchmark {
 
 	@Autowired
@@ -40,7 +37,7 @@ public class AutoIncrementIdBenchmark {
 
 		AtomicBoolean stop = new AtomicBoolean(false);
 
-		int concurrents = 800; // 并发数
+		int concurrents = 10; // 并发数
 		for(int i = 0; i < concurrents; i++) {
 			Thread thread = new Thread(new Runnable() {
 				@Override

@@ -10,6 +10,7 @@
 	<modules>
         <module>redis-helper</module>
         <module>redis-helper-test</module>
+		<module>redis-helper-benchmark</module>
 	</modules>
 
 </project>
