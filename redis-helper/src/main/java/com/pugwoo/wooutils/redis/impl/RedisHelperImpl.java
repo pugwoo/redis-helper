@@ -82,7 +82,7 @@ public class RedisHelperImpl implements RedisHelper {
 	/**连接和读超时的毫秒数，由于redis性能非常高，这里没必要区分是连接超时还是读超时了*/
 	private Duration timeout = Duration.ofMillis(2000);
 	/**String和Object之间的转换对象*/
-	private IRedisObjectConverter redisObjectConverter;
+	private IRedisObjectConverter redisObjectConverter = new JsonRedisObjectConverter();
 	
 	/**
 	 * 单例的JedisPool，懒加载初始化
