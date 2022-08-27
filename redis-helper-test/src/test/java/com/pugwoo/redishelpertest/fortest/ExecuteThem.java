@@ -1,4 +1,4 @@
-package com.pugwoo.wooutils.fortest;
+package com.pugwoo.redishelpertest.fortest;
 
 import java.util.ArrayList;
 import java.util.List;

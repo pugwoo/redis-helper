@@ -1,9 +1,9 @@
 package com.pugwoo.wooutils.benchmark;
 
-import com.pugwoo.wooutils.fortest.ExecuteThem;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.RedisMsg;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
+import com.pugwoo.wooutils.task.ExecuteThem;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;

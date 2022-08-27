@@ -1,8 +1,7 @@
-package com.pugwoo.wooutils.redis.sync;
-
-import org.springframework.stereotype.Service;
+package com.pugwoo.redishelpertest.redis.sync;
 
 import com.pugwoo.wooutils.redis.Synchronized;
+import org.springframework.stereotype.Service;
 
 import java.util.Date;
 

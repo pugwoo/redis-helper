@@ -1,20 +1,17 @@
-package com.pugwoo.wooutils;
+package com.pugwoo.redishelpertest;
 
-import com.pugwoo.wooutils.fortest.EqualUtils;
+import com.pugwoo.redishelpertest.redis.Student;
+import com.pugwoo.wooutils.lang.EqualUtils;
 import com.pugwoo.wooutils.redis.RedisHelper;
-import com.pugwoo.wooutils.redis.Student;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.boot.test.context.SpringBootTest;
 import redis.clients.jedis.ScanResult;
 
 import java.math.BigDecimal;
 import java.util.*;
 
-@ContextConfiguration(locations = {"classpath:applicationContext-context.xml"})
-@RunWith(SpringJUnit4ClassRunner.class)
+@SpringBootTest
 public class TestRedisHelper {
 	
     @Autowired

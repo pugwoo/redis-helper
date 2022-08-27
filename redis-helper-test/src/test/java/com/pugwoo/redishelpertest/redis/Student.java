@@ -1,4 +1,4 @@
-package com.pugwoo.wooutils.redis;
+package com.pugwoo.redishelpertest.redis;
 
 import java.math.BigDecimal;
 import java.util.Date;

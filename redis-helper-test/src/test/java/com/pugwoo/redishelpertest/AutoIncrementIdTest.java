@@ -1,16 +1,13 @@
-package com.pugwoo.wooutils;
+package com.pugwoo.redishelpertest;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.*;
 
-@ContextConfiguration(locations = {"classpath:applicationContext-context.xml"})
-@RunWith(SpringJUnit4ClassRunner.class)
+@SpringBootTest
 public class AutoIncrementIdTest {
 
 	@Autowired

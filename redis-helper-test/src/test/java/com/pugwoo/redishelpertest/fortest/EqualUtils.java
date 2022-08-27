@@ -1,4 +1,4 @@
-package com.pugwoo.wooutils.fortest;
+package com.pugwoo.redishelpertest.fortest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

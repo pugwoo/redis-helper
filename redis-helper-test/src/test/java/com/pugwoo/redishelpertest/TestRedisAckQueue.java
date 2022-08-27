@@ -1,20 +1,17 @@
-package com.pugwoo.wooutils;
+package com.pugwoo.redishelpertest;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.RedisMsg;
 import com.pugwoo.wooutils.redis.RedisQueueStatus;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@ContextConfiguration(locations = {"classpath:applicationContext-context.xml"})
-@RunWith(SpringJUnit4ClassRunner.class)
+@SpringBootTest
 public class TestRedisAckQueue {
 
     @Autowired

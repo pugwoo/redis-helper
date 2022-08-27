@@ -1,16 +1,12 @@
-package com.pugwoo.wooutils;
+package com.pugwoo.redishelpertest;
 
-import com.pugwoo.wooutils.fortest.EqualUtils;
 import com.pugwoo.wooutils.json.JSON;
 import com.pugwoo.wooutils.lang.DateUtils;
+import com.pugwoo.wooutils.lang.EqualUtils;
 import com.rits.cloning.Cloner;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 
 public class TestFastClone {
 

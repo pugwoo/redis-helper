@@ -1,16 +1,14 @@
-package com.pugwoo.wooutils;
+package com.pugwoo.redishelpertest;
 
+import com.pugwoo.redishelpertest.redis.sync.HeartbeatTestService;
+import com.pugwoo.redishelpertest.redis.sync.HelloService;
+import com.pugwoo.redishelpertest.redis.sync.ThrowIfNotGetLockTestService;
 import com.pugwoo.wooutils.redis.NotGetLockException;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.RedisSyncContext;
-import com.pugwoo.wooutils.redis.sync.HeartbeatTestService;
-import com.pugwoo.wooutils.redis.sync.HelloService;
-import com.pugwoo.wooutils.redis.sync.ThrowIfNotGetLockTestService;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -19,8 +17,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@ContextConfiguration(locations = {"classpath:applicationContext-context.xml"})
-@RunWith(SpringJUnit4ClassRunner.class)
+@SpringBootTest
 public class TestSync {
 	@Autowired
 	private RedisHelper redisHelper;
