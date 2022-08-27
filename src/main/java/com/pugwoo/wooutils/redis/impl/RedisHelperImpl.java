@@ -99,7 +99,9 @@ public class RedisHelperImpl implements RedisHelper {
 					JedisPoolConfig poolConfig = new JedisPoolConfig();
 					poolConfig.setMaxTotal(maxConnection); // 最大链接数
 					poolConfig.setTestOnBorrow(testOnBorrow);
-					poolConfig.setMaxWait(timeout);
+					// 还是先用这个废弃的方法，因为setMaxWait 2.11才有，而jedis 3.6.x还在用2.9版本，导致稍微低一点版本的jedis就用不了
+					poolConfig.setMaxWaitMillis(timeout.toMillis());
+					// poolConfig.setMaxWait(timeout);
 
 					if(password != null && password.trim().isEmpty()) {
 						password = null;
