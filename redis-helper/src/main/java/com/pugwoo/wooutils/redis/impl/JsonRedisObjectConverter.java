@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.type.TypeFactory;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.pugwoo.wooutils.redis.IRedisObjectConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,8 @@ public class JsonRedisObjectConverter implements IRedisObjectConverter {
 		mapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false); // 对于没有任何getter的bean序列化不抛异常
 		mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false); //属性不存在的兼容处理
 		mapper.getSerializerProvider().setNullKeySerializer(new NullKeySerializer()); // 当map含有null key时，转成空字符串
+
+		mapper.registerModule(new JavaTimeModule()); // 解析LocalDate等
 	}
 
 	private static class NullKeySerializer extends JsonSerializer<Object> {
