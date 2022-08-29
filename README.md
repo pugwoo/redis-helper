@@ -5,6 +5,8 @@ useful redis features
 <dependency>
 	<groupId>com.pugwoo</groupId>
 	<artifactId>redis-helper</artifactId>
-	<version>1.2.1</version>
+	<version>1.2.3</version>
 </dependency>
 ```
+
+Fully tests with Spring Boot 2.2.x ~ 2.7.x, jedis 3.1.0 ~ 3.8.0
