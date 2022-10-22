@@ -206,11 +206,14 @@ public class RedisSyncAspect implements InitializingBean {
 			}
 
 			while (true) { // 一直循环，不会退出
-				for(Map.Entry<String, HeartBeatInfo> key : heartBeatKeys.entrySet()) {
-					HeartBeatInfo heartBeatInfo = key.getValue();
-					redisHelper.renewalLock(heartBeatInfo.namespace, heartBeatInfo.key,
-							heartBeatInfo.lockUuid,
-							heartBeatInfo.heartbeatExpireSecond);
+				for(String key : heartBeatKeys.keySet()) {
+					HeartBeatInfo heartBeatInfo = heartBeatKeys.get(key);
+					// 相当于double-check
+					if (heartBeatInfo != null) {
+						redisHelper.renewalLock(heartBeatInfo.namespace, heartBeatInfo.key,
+								heartBeatInfo.lockUuid,
+								heartBeatInfo.heartbeatExpireSecond);
+					}
 				}
 
 				try {
