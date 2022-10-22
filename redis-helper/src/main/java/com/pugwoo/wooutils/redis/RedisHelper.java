@@ -236,7 +236,7 @@ public interface RedisHelper {
 	
 	/**
 	 * 使用了一次限制。一般来说，业务都是在处理成功后才扣减使用是否成功的限制，
-	 * 如果使用失败了，如果业务支持事务回滚，那么可以回滚掉，此时可以不用RedisTransation做全局限制。
+	 * 如果使用失败了，如果业务支持事务回滚，那么可以回滚掉，此时可以不用RedisTransaction做全局限制。
 	 * 
 	 * @param limitEnum
 	 * @param key
@@ -246,7 +246,7 @@ public interface RedisHelper {
 	
 	/**
 	 * 使用了count次限制。一般来说，业务都是在处理成功后才扣减使用是否成功的限制，
-	 * 如果使用失败了，如果业务支持事务回滚，那么可以回滚掉，此时可以不用RedisTransation做全局限制。
+	 * 如果使用失败了，如果业务支持事务回滚，那么可以回滚掉，此时可以不用RedisTransaction做全局限制。
 	 * 
 	 * @param limitParam
 	 * @param key
@@ -288,11 +288,20 @@ public interface RedisHelper {
 	/////////////////// Redis Auto Increment ID 分布式自增id //////////////////////
 	
 	/**
-	 * 获得自增id，从1开始
+	 * 获得自增id，从1开始<br/>
+	 * 说明：自增ID的namespace永久生效，如需设置自动过期清理时间，请使用getAutoIncrementId带expireSeconds参数的方法
 	 * @param namespace 必须，由使用方自定决定，用于区分不同的业务。实际redis key会加上_ID后缀
 	 * @return 获取失败(例如网络原因不通等)返回null，注意判断和重试
 	 */
 	Long getAutoIncrementId(String namespace);
+
+	/**
+	 * 获得自增id，从1开始
+	 * @param namespace 必须，由使用方自定决定，用于区分不同的业务。实际redis key会加上_ID后缀
+	 * @param expireSeconds 过期时间，大于0时生效；重新获取时会重新设置过期时间
+	 * @return 获取失败(例如网络原因不通等)返回null，注意判断和重试
+	 */
+	Long getAutoIncrementId(String namespace, int expireSeconds);
 
 	/////////////////// Redis 带 ACK 机制的消息队列 ///////////////////////////////
 

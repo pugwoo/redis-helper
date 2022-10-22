@@ -613,6 +613,11 @@ public class RedisHelperImpl implements RedisHelper {
 		return RedisAutoIncrementId.getAutoIncrementId(this, namespace);
 	}
 
+	@Override
+	public Long getAutoIncrementId(String namespace, int expireSeconds) {
+		return RedisAutoIncrementId.getAutoIncrementId(this, namespace, expireSeconds);
+	}
+
 	private void addTopicToTask(String topic) {
 		if(recoverMsgTask == null) {
 			synchronized (RedisMsgQueue.RecoverMsgTask.class) {
