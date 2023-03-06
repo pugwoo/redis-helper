@@ -14,9 +14,9 @@
 
 	<!-- redis -->
 	<bean id="redisHelper" class="com.pugwoo.wooutils.redis.impl.RedisHelperImpl">
-	    <property name="host" value="192.168.0.111"/>
+	    <property name="host" value="127.0.0.1"/>
 	    <property name="port" value="6379"/>
-	    <property name="password" value="devdev"/>
+	    <property name="password" value="123456"/>
 	    <property name="database" value="0" />
 		<property name="maxConnection" value="1000" />
         <property name="redisObjectConverter" ref="jsonRedisObjectConverter"/>
