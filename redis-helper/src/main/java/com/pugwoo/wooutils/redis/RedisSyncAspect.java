@@ -2,11 +2,6 @@ package com.pugwoo.wooutils.redis;
 
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import com.pugwoo.wooutils.utils.ClassUtils;
-import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -18,6 +13,12 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
+import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
 @EnableAspectJAutoProxy
 @Aspect
 public class RedisSyncAspect implements InitializingBean {
@@ -28,7 +29,6 @@ public class RedisSyncAspect implements InitializingBean {
     private RedisHelper redisHelper;
 
     private static class HeartBeatInfo {
-
         public Integer heartbeatExpireSecond;
         public String namespace;
         public String key;
@@ -88,24 +88,24 @@ public class RedisSyncAspect implements InitializingBean {
         // 构造兔子数列
         int a = 0, b = 1;
         long start = System.currentTimeMillis();
+        int tmpExpireSecond = p.expireSecond > 0 ? p.expireSecond : p.heartbeatExpireSecond;
         for (; true; ) {
-            int tmpExpireSecond = p.expireSecond > 0 ? p.expireSecond : p.heartbeatExpireSecond;
             String lockUuid = redisHelper.requireLock(p.namespace, p.key, tmpExpireSecond);
             if (lockUuid != null) {
                 logSuccessGetLock(p, lockUuid);
+
                 String uuid = null;
-                try {
-                    if (p.expireSecond <= 0) {
-                        // 此时是心跳机制
+                // try {
+                    if (p.expireSecond <= 0) { // 此时是心跳机制
                         uuid = putToHeatBeat(p, lockUuid);
                     }
                     RedisSyncContext.set(true, true);
                     return RedisSyncRet.successGetLock(uuid, lockUuid, System.currentTimeMillis() - start);
-                } catch (Exception ignore) {
-                }
+               // } catch (Exception ignore) {
+               // }
             }
 
-            if (p.logDebug && lockUuid == null) {
+            if (p.logDebug) {
                 LOGGER.info("namespace:{},key:{}, NOT get a lock,threadName:{}", p.namespace, p.key,
                         Thread.currentThread().getName());
             }
@@ -134,10 +134,9 @@ public class RedisSyncAspect implements InitializingBean {
                 Thread.sleep(p.waitLockMillisecond - totalWait);
             } else {
                 Thread.sleep(b);
-                int c = a + b;
+                int c = a + b; // 构造兔子数列
                 a = b;
                 b = c;
-                // 构造兔子数列
                 if (b > 1000) {
                     b = 1000;
                 }
@@ -171,8 +170,7 @@ public class RedisSyncAspect implements InitializingBean {
     }
 
     private String putToHeatBeat(RedisSyncParam p, String lockUuid) {
-        String uuid;
-        uuid = UUID.randomUUID().toString();
+        String uuid = UUID.randomUUID().toString();
         HeartBeatInfo heartBeatInfo = new HeartBeatInfo();
         heartBeatInfo.namespace = p.namespace;
         heartBeatInfo.key = p.key;

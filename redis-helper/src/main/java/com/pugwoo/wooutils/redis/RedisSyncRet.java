@@ -17,13 +17,11 @@ public class RedisSyncRet {
      */
     String lockUuid;
 
-
-
     long totalWaitTime;
 
 
-    protected static RedisSyncRet successGetLock( String uuid, String lockUuid, long totalWaitTime) {
-        return new RedisSyncRet(true,uuid, lockUuid, totalWaitTime);
+    protected static RedisSyncRet successGetLock(String uuid, String lockUuid, long totalWaitTime) {
+        return new RedisSyncRet(true, uuid, lockUuid, totalWaitTime);
     }
 
     protected static RedisSyncRet notGetLock(long totalWaitTime) {

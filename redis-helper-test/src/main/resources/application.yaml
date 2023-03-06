@@ -1,6 +1,6 @@
 spring:
   redis:
-    host: localhost
+    host: 192.168.0.111
     port: 6379
-    password: 123456
+    password: devdev
     database: 10
