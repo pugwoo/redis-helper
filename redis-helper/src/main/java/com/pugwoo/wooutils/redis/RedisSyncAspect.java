@@ -2,6 +2,13 @@ package com.pugwoo.wooutils.redis;
 
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import com.pugwoo.wooutils.utils.ClassUtils;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -13,22 +20,29 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
-import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-
 @EnableAspectJAutoProxy
 @Aspect
 public class RedisSyncAspect implements InitializingBean {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisSyncAspect.class);
 
+
+    // 成功获取锁的相关信息， 总成功锁数，时间，平均时间
+    private int successNum;
+    private long totalAcquireLockTime;
+
+
+    // 第 n 个锁， 尝试的次数
+    // 最高记录 10 个锁的情况
+    private long[] tryNums = new long[10];
+    private long[] tryTotalTimes = new long[10];
+
+
     @Autowired
     private RedisHelper redisHelper;
 
     private static class HeartBeatInfo {
+
         public Integer heartbeatExpireSecond;
         public String namespace;
         public String key;
@@ -49,26 +63,83 @@ public class RedisSyncAspect implements InitializingBean {
             heartbeatRenewalTask.start();
             LOGGER.info("@Synchronized init success.");
         }
+
+    }
+
+    /**
+     * 这里是多个加锁的实现
+     */
+    @Around("@annotation(com.pugwoo.wooutils.redis.Synchronizeds) execution(* *.*(..))")
+    public Object arounds(ProceedingJoinPoint pjp) throws Throwable {
+        return processAround(pjp, true);
     }
 
     @Around("@annotation(com.pugwoo.wooutils.redis.Synchronized) execution(* *.*(..))")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        return processAround(pjp, false);
+    }
+
+    private Object processAround(ProceedingJoinPoint pjp, boolean isMultiLock) throws Throwable {
+        // if not set redis, process method
         if (this.redisHelper == null) {
             LOGGER.error("redisHelper is null, RedisSyncAspect will pass through all method call");
             RedisSyncContext.set(false, true);
             return pjp.proceed();
         }
-
-        RedisSyncParam p = constructParam(pjp);
-        RedisSyncRet r = tryGetLockWithRabbitSeries(p);
-        if (r.successGetLock) {
-            try {
-                return p.pjp.proceed();
-            } finally {
-                releaseLock(p, r);
-            }
+        List<RedisSyncParam> params;
+        if (!isMultiLock) {
+            params = toList(constructParam(pjp));
+        } else {
+            params = constructParams(pjp);
         }
-        return null;
+
+        return proceed(params, 0, System.currentTimeMillis());
+    }
+
+    private Object proceed(List<RedisSyncParam> params, int i, long startTime) throws Throwable {
+        RedisSyncParam param = params.get(i);
+        RedisSyncRet redisSyncRet = tryGetLockWithRabbitSeries(param);
+
+        // not get redis lock
+        if (!redisSyncRet.successGetLock) {
+            return null;
+        }
+        RedisSyncContext.recordOneLockCost(i, redisSyncRet.waitNum, redisSyncRet.waitCost);
+
+        // if all redis lock got, then process method, otherwise get next redis lock
+        try {
+            if (params.size() - 1 == i) {
+                RedisSyncContext.recordSuccessTotalLockCost(System.currentTimeMillis() - startTime);
+                return param.pjp.proceed();
+            }
+            return proceed(params, i + 1, startTime);
+        } finally {
+            releaseLock(param, redisSyncRet);
+        }
+    }
+
+    private List<RedisSyncParam> constructParams(ProceedingJoinPoint pjp) {
+        MethodSignature signature = (MethodSignature) pjp.getSignature();
+        Method targetMethod = signature.getMethod();
+        Synchronizeds syncs = targetMethod.getAnnotation(Synchronizeds.class);
+        Synchronized[] value = syncs.value();
+
+        List<RedisSyncParam> params = new ArrayList<>();
+        for (Synchronized sync : value) {
+            RedisSyncParam param = constructParam(sync, targetMethod, pjp.getArgs());
+            param.sync = sync;
+            param.targetMethod = targetMethod;
+            param.pjp = pjp;
+            params.add(param);
+        }
+        return params;
+    }
+
+
+    private List<RedisSyncParam> toList(RedisSyncParam p) {
+        List<RedisSyncParam> ret = new ArrayList<>();
+        ret.add(p);
+        return ret;
     }
 
     private void releaseLock(RedisSyncParam p, RedisSyncRet redisSyncRet) {
@@ -89,20 +160,33 @@ public class RedisSyncAspect implements InitializingBean {
         int a = 0, b = 1;
         long start = System.currentTimeMillis();
         int tmpExpireSecond = p.expireSecond > 0 ? p.expireSecond : p.heartbeatExpireSecond;
-        for (; true; ) {
+        for (int i = 1; true; i++) {
+
+            long lockStart = System.currentTimeMillis();
             String lockUuid = redisHelper.requireLock(p.namespace, p.key, tmpExpireSecond);
+
             if (lockUuid != null) {
+
+                /*  获取到了锁，到这里之前发生了 GC， 或者获取锁的时候网络TTL 大，导致锁快要过期了, 这里网络延时导致的可能概率很小
+                 */
+                if (System.currentTimeMillis() - lockStart > tmpExpireSecond * 1000L - 100L) {
+                    boolean result = redisHelper.releaseLock(p.namespace, p.key, lockUuid);
+                    logReleaseLock(p, lockUuid, result);
+                    return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i);
+                }
+
                 logSuccessGetLock(p, lockUuid);
 
                 String uuid = null;
                 // try {
-                    if (p.expireSecond <= 0) { // 此时是心跳机制
-                        uuid = putToHeatBeat(p, lockUuid);
-                    }
-                    RedisSyncContext.set(true, true);
-                    return RedisSyncRet.successGetLock(uuid, lockUuid, System.currentTimeMillis() - start);
-               // } catch (Exception ignore) {
-               // }
+                if (p.expireSecond <= 0) { // 此时是心跳机制
+                    uuid = putToHeatBeat(p, lockUuid);
+                }
+
+                RedisSyncContext.set(true, true);
+                return RedisSyncRet.successGetLock(uuid, lockUuid, System.currentTimeMillis() - start, i);
+                // } catch (Exception ignore) {
+                // }
             }
 
             if (p.logDebug) {
@@ -117,7 +201,7 @@ public class RedisSyncAspect implements InitializingBean {
                             Thread.currentThread().getName());
                 }
                 mayThrowExceptionIfNotGetLock(p.sync, p.targetMethod, p.namespace, p.key);
-                return new RedisSyncRet(false, System.currentTimeMillis() - start);
+                return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i);
             }
 
             long totalWait = System.currentTimeMillis() - start;
@@ -128,7 +212,7 @@ public class RedisSyncAspect implements InitializingBean {
                             p.namespace, p.key, totalWait, Thread.currentThread().getName());
                 }
                 mayThrowExceptionIfNotGetLock(p.sync, p.targetMethod, p.namespace, p.key);
-                return new RedisSyncRet(false, System.currentTimeMillis() - start);
+                return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i);
             }
             if (p.waitLockMillisecond - totalWait < b) {
                 Thread.sleep(p.waitLockMillisecond - totalWait);
@@ -273,6 +357,7 @@ public class RedisSyncAspect implements InitializingBean {
             }
 
             while (true) { // 一直循环，不会退出
+                long start = System.currentTimeMillis();
                 for (String key : heartBeatKeys.keySet()) {
                     HeartBeatInfo heartBeatInfo = heartBeatKeys.get(key);
                     // 相当于double-check
@@ -282,9 +367,17 @@ public class RedisSyncAspect implements InitializingBean {
                                 heartBeatInfo.heartbeatExpireSecond);
                     }
                 }
-
+                long end = start - System.currentTimeMillis();
                 try {
-                    Thread.sleep(3000); // 3秒heart beat一次
+                    long waitTime = 3000 - end - 50;
+                    if (waitTime < 0 ) {
+                        waitTime = 0;
+                        LOGGER.error("heartbeat wait time error");
+                    }
+                    // 这里续租时间稍微短一点，可能执行还要时间
+                    // 一个应用可能几十个锁同时执行， 一个延时 30ms 可能达到1秒之多
+                    // todo HashedWheelTime
+                    Thread.sleep(waitTime); // 3秒heart beat一次
                 } catch (InterruptedException e) { // ignore
                 }
             }

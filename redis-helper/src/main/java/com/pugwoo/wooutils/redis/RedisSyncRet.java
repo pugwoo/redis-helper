@@ -17,27 +17,28 @@ public class RedisSyncRet {
      */
     String lockUuid;
 
-    long totalWaitTime;
+    long waitCost;
+    long waitNum;
 
 
-    protected static RedisSyncRet successGetLock(String uuid, String lockUuid, long totalWaitTime) {
-        return new RedisSyncRet(true, uuid, lockUuid, totalWaitTime);
+    protected static RedisSyncRet successGetLock(String uuid, String lockUuid, long waitCost, long waitNum) {
+        return new RedisSyncRet(true, uuid, lockUuid, waitCost,waitNum);
     }
 
-    protected static RedisSyncRet notGetLock(long totalWaitTime) {
-        return new RedisSyncRet(false, totalWaitTime);
+    protected static RedisSyncRet notSuccessGetLock(long waitCost, long waitNum) {
+        return new RedisSyncRet(false, waitCost,waitNum);
     }
 
 
-    public RedisSyncRet(boolean successGetLock, long totalWaitTime) {
-        this.successGetLock = successGetLock;
-        this.totalWaitTime = totalWaitTime;
-    }
-
-    public RedisSyncRet(boolean successGetLock, String uuid, String lockUuid, long totalWaitTime) {
-        this.successGetLock = successGetLock;
+    public RedisSyncRet(boolean successGetLock, String uuid, String lockUuid, long waitCost, long waitNum) {
+        this(successGetLock,waitCost,waitNum);
+        this.uuid = uuid;
         this.lockUuid = lockUuid;
-        this.totalWaitTime = totalWaitTime;
     }
 
+    public RedisSyncRet(boolean successGetLock, long waitCost, long waitNum) {
+        this.successGetLock = successGetLock;
+        this.waitCost = waitCost;
+        this.waitNum = waitNum;
+    }
 }
