@@ -26,23 +26,10 @@ public class RedisSyncAspect implements InitializingBean {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisSyncAspect.class);
 
-
-    // 成功获取锁的相关信息， 总成功锁数，时间，平均时间
-    private int successNum;
-    private long totalAcquireLockTime;
-
-
-    // 第 n 个锁， 尝试的次数
-    // 最高记录 10 个锁的情况
-    private long[] tryNums = new long[10];
-    private long[] tryTotalTimes = new long[10];
-
-
     @Autowired
     private RedisHelper redisHelper;
 
     private static class HeartBeatInfo {
-
         public Integer heartbeatExpireSecond;
         public String namespace;
         public String key;

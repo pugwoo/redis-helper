@@ -42,7 +42,7 @@ public @interface Synchronized {
 	 * 请使用者合理评估任务执行时间，推荐按正常执行时间的10倍~100倍评估该时间。
      *
      * 当expireSecond大于0时有效，如果指定了expireSecond，则heartbeatSecond失效。
-	 * @return
+	 * @return bool
 	 */
 	int expireSecond() default 0;
 
@@ -50,7 +50,7 @@ public @interface Synchronized {
      * 锁的心跳超时秒数，默认使用心跳机制。
      * 设置心跳秒数，方便任务执行时间不定的锁。
      * 默认30秒，建议设置为15或30秒。分布式锁会每3秒钟向redis心跳一次。
-     * @return
+     * @return bool
      */
 	int heartbeatExpireSecond() default 30;
 	
@@ -58,13 +58,13 @@ public @interface Synchronized {
 	 * 当进程/线程没有拿到锁时，阻塞等待的时间，单位毫秒，默认10000毫秒
 	 * （取10秒这个值考虑的是人类等待计算机反馈的不耐烦的大概时间）。
 	 * 如果不需要阻塞，请设置为0.
-	 * @return
+	 * @return bool
 	 */
 	int waitLockMillisecond() default 10000;
 
 	/**
 	 * 是否开启记录获得锁和释放锁的日志，默认关闭
-	 * @return
+	 * @return bool
 	 */
 	boolean logDebug() default false;
 	
