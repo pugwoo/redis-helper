@@ -17,9 +17,15 @@ public class RedisSyncRet {
      */
     String lockUuid;
 
+    /**
+     * 等待锁的时间
+     */
     long waitCost;
-    long waitNum;
 
+    /**
+     * 尝试加锁的次数
+     */
+    long waitNum;
 
     protected static RedisSyncRet successGetLock(String uuid, String lockUuid, long waitCost, long waitNum) {
         return new RedisSyncRet(true, uuid, lockUuid, waitCost,waitNum);

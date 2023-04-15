@@ -2,13 +2,6 @@ package com.pugwoo.wooutils.redis;
 
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import com.pugwoo.wooutils.utils.ClassUtils;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -19,6 +12,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
+
+import java.lang.reflect.Method;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @EnableAspectJAutoProxy
 @Aspect
@@ -91,7 +88,6 @@ public class RedisSyncAspect implements InitializingBean {
         if (!redisSyncRet.successGetLock) {
             return null;
         }
-        RedisSyncContext.recordOneLockCost(i, redisSyncRet.waitNum, redisSyncRet.waitCost);
 
         // if all redis lock got, then process method, otherwise get next redis lock
         try {
@@ -154,9 +150,8 @@ public class RedisSyncAspect implements InitializingBean {
 
             if (lockUuid != null) {
 
-                /*  获取到了锁，到这里之前发生了 GC， 或者获取锁的时候网络TTL 大，导致锁快要过期了, 这里网络延时导致的可能概率很小
-                 */
-                if (System.currentTimeMillis() - lockStart > tmpExpireSecond * 1000L - 100L) {
+                // 获取到了锁，到这里之前发生了 GC或者获取锁的时候网络TTL大，导致锁过期了，则进行解锁并等待下一轮获取
+                if (System.currentTimeMillis() - lockStart > tmpExpireSecond * 1000L) {
                     boolean result = redisHelper.releaseLock(p.namespace, p.key, lockUuid);
                     logReleaseLock(p, lockUuid, result);
                     return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i);
@@ -165,15 +160,12 @@ public class RedisSyncAspect implements InitializingBean {
                 logSuccessGetLock(p, lockUuid);
 
                 String uuid = null;
-                // try {
                 if (p.expireSecond <= 0) { // 此时是心跳机制
                     uuid = putToHeatBeat(p, lockUuid);
                 }
 
                 RedisSyncContext.set(true, true);
                 return RedisSyncRet.successGetLock(uuid, lockUuid, System.currentTimeMillis() - start, i);
-                // } catch (Exception ignore) {
-                // }
             }
 
             if (p.logDebug) {

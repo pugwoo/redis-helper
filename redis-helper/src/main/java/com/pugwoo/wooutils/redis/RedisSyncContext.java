@@ -3,6 +3,9 @@ package com.pugwoo.wooutils.redis;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 
 /**
  * 记录最后一次@Synchronized的执行结果信息
@@ -13,8 +16,6 @@ public class RedisSyncContext {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisSyncContext.class);
 
-
-    @SuppressWarnings("AlibabaThreadLocalShouldRemove")
     private static final ThreadLocal<RedisSyncContext> CONTEXT_TL = new ThreadLocal<>();
 
     /**
@@ -34,49 +35,20 @@ public class RedisSyncContext {
      * 2. 时间: getTotalLockCost
      * 3. 平均时间: getTotalLockCost / getTotalLockNum
      */
-    private static int getTotalLockNum = 0;
-    private static long getTotalLockCost = 0;
+    private static final AtomicInteger getTotalLockNum = new AtomicInteger(0);
+    private static final AtomicLong getTotalLockCost = new AtomicLong(0);
 
-    public synchronized static void recordSuccessTotalLockCost(long totalCost) {
-        getTotalLockCost += totalCost;
-        getTotalLockNum++;
-    }
-
-    /**
-     * 第 n 个锁， 尝试的次数
-     * 最高记录 5 个锁的情况
-     */
-    private static final long[] getOneLockNum = new long[5];
-    private static final long[] getOneLockCost = new long[5];
-
-    /**
-     * 设置第i次的耗时信息：
-     *
-     * @param waitTime 单个锁等待的次数，目前是兔子数列
-     * @param waitCost 单个锁等待的总时间消耗
-     */
-    protected synchronized static void recordOneLockCost(int i, long waitTime, long waitCost) {
-        if (i >= getOneLockNum.length) {
-            return;
-        }
-        getOneLockNum[i] += waitTime;
-        getOneLockCost[i] += waitCost;
+    public static void recordSuccessTotalLockCost(long totalCost) {
+        getTotalLockNum.incrementAndGet();
+        getTotalLockCost.addAndGet(totalCost);
     }
 
     public static void printCostInfo() {
-        if (getTotalLockNum != 0) {
+        if (getTotalLockNum.get() != 0) {
             LOGGER.info("getTotalLockCost: {}, getTotalLockNum: {}, avgGetTotalLockCost: {}",
-                    getTotalLockCost, getTotalLockNum, getTotalLockCost / getTotalLockNum);
-        }
-        for (int i = 0; i < getOneLockNum.length; i++) {
-            if (getOneLockNum[i] == 0) {
-                continue;
-            }
-            LOGGER.info("i:{}, getOneLockCost: {}, getOneLockNum: {}, avgGetOneLockCost: {}",
-                    i, getOneLockCost[i], getOneLockNum[i], getOneLockCost[i] / getOneLockNum[i]);
+                    getTotalLockCost, getTotalLockNum, getTotalLockCost.get() / getTotalLockNum.get());
         }
     }
-
 
     /**
      * 设置最后一次执行的结果信息。必须一次性设置完
