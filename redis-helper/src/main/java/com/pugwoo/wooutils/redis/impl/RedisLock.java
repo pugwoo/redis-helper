@@ -31,22 +31,6 @@ public class RedisLock {
 		return namespace + ":" + key;
 	}
 
-
-    enum ReidsCommand implements ProtocolCommand {
-        CAD("CAD"), CAS("CAS");
-
-        private final byte[] raw;
-
-        ReidsCommand(String alt) {
-            raw = SafeEncoder.encode(alt);
-        }
-
-        @Override
-        public byte[] getRaw() {
-            return raw;
-        }
-    }
-
     /**
      * 获得一个名称为key的锁，redis保证同一时刻只有一个client可以获得锁。
      *
@@ -63,23 +47,18 @@ public class RedisLock {
             return null;
         }
 
-        String uuid = null;
         try {
             String newKey = getKey(namespace, key);
-            uuid = UUID.randomUUID().toString();
+            String uuid = UUID.randomUUID().toString();
             boolean result = redisHelper.setStringIfNotExist(newKey, maxTransactionSeconds, uuid);
             return result ? uuid : null;
         } catch (Exception e) {
             // 这里可能有一种极端情况， redis 网络返回超时了，实际上redis的锁获取成功了
-            // 这里尝试去释放 redis lock，确保不会误删
-            try {
-                String finalUuid = uuid;
-                redisHelper.execute(jedis -> {
-                    jedis.getClient().sendCommand(ReidsCommand.CAD, key, finalUuid);
-                    return true;
-                });
-            } catch (Exception ignore) {
-            }
+			// 这种情况暂不进行处理，等待锁超时，原因：
+			// 1）低概率事情
+			// 2）网络异常情况下，uuid实际上拿不到，也无法解锁
+			// 3）此时网络情况可能较差，去解锁也不一定成功
+			// 4）redis会超时解锁，系统会自动恢复，目前超时是30秒，可以接受
             LOGGER.error("requireLock error, namespace:{}, key:{}", namespace, key, e);
             return null;
         }
