@@ -344,7 +344,6 @@ public class RedisSyncAspect implements InitializingBean {
             }
 
             while (true) { // 一直循环，不会退出
-                long start = System.currentTimeMillis();
                 for (String key : heartBeatKeys.keySet()) {
                     HeartBeatInfo heartBeatInfo = heartBeatKeys.get(key);
                     // 相当于double-check
@@ -354,17 +353,8 @@ public class RedisSyncAspect implements InitializingBean {
                                 heartBeatInfo.heartbeatExpireSecond);
                     }
                 }
-                long end = start - System.currentTimeMillis();
                 try {
-                    long waitTime = 3000 - end - 50;
-                    if (waitTime < 0 ) {
-                        waitTime = 0;
-                        LOGGER.error("heartbeat wait time error");
-                    }
-                    // 这里续租时间稍微短一点，可能执行还要时间
-                    // 一个应用可能几十个锁同时执行， 一个延时 30ms 可能达到1秒之多
-                    // todo HashedWheelTime
-                    Thread.sleep(waitTime); // 3秒heart beat一次
+                    Thread.sleep(3000); // 3秒heart beat一次，这里是fixed delay，已经考虑到3秒对于30秒的默认超时时长，已经足够了
                 } catch (InterruptedException e) { // ignore
                 }
             }
