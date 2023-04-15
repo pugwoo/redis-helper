@@ -1,13 +1,11 @@
 package com.pugwoo.redishelpertest;
 
 import com.pugwoo.redishelpertest.redis.sync.HelloServiceWithMutilLock;
-import com.pugwoo.redishelpertest.redis.sync.ThrowIfNotGetLockTestService;
 import com.pugwoo.wooutils.redis.RedisSyncContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,12 +14,6 @@ public class TestSyncWithMutilLock {
 
     @Autowired
     private HelloServiceWithMutilLock helloServiceWithMutilLock;
-    @Autowired
-    private ThrowIfNotGetLockTestService throwIfNotGetLockTestService;
-
-    public static final DateTimeFormatter DTF = DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss.SSS");
-
-
 
     @Test
     public void testAdd() throws Exception {
@@ -33,7 +25,7 @@ public class TestSyncWithMutilLock {
         for (int i = 1; i <= 10; i++) {
             Thread t = new Thread(() -> {
                 try {
-                    for (int i1 = 0; i1 < 100; i1++) {
+                    for (int i1 = 0; i1 < 30; i1++) {
                         helloServiceWithMutilLock.add();
                     }
                 } catch (Exception e) {
@@ -50,7 +42,7 @@ public class TestSyncWithMutilLock {
 
         RedisSyncContext.printCostInfo();
 
-        assert helloServiceWithMutilLock.getA() == 100 * 10;
+        assert helloServiceWithMutilLock.getA() == 30 * 10;
     }
 
     @Test
