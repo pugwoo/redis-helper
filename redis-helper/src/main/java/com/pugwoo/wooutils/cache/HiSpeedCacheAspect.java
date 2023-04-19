@@ -48,15 +48,18 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private final AtomicInteger fastCloneFailCount = new AtomicInteger();
     private final Cloner cloner = new Cloner();
 
+    private final long startTimestamp = System.currentTimeMillis();
+
     @Autowired(required = false)
     private RedisHelper redisHelper;
 
     @Override
     public void afterPropertiesSet() {
+        long cost = System.currentTimeMillis() - startTimestamp;
         if(redisHelper == null) {
-            LOGGER.info("@HiSpeedCache init success.");
+            LOGGER.info("@HiSpeedCache init success, cost:{} ms.", cost);
         } else {
-            LOGGER.info("@HiSpeedCache init success with redisHelper.");
+            LOGGER.info("@HiSpeedCache init success with redisHelper, cost:{} ms.", cost);
         }
     }
 
