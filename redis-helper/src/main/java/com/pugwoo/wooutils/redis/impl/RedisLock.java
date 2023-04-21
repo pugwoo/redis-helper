@@ -4,8 +4,6 @@ import com.pugwoo.wooutils.redis.RedisHelper;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.commands.ProtocolCommand;
-import redis.clients.jedis.util.SafeEncoder;
 
 /**
  * @author nick
