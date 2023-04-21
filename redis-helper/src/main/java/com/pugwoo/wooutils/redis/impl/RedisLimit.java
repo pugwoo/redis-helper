@@ -40,12 +40,12 @@ public class RedisLimit {
 		try {
 			key = getKey(limitParam, key);
 			String value = redisHelper.getString(key);
-			int usedCount = value == null ? 0 : new Integer(value);
+			int usedCount = value == null ? 0 : Integer.valueOf(value);
 			int left = limitParam.getLimitCount() - usedCount;
 			return left < 0 ? 0 : left;
 		} catch (Exception e) {
 			LOGGER.error("getLimitCount error,namespace:{},key:{}",
-					limitParam.getNamespace(), key, e);
+			limitParam.getNamespace(), key, e);
 			return -1;
 		}
 	}
