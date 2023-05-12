@@ -1,9 +1,10 @@
 package com.pugwoo.wooutils.redis.impl;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.UUID;
 
 /**
  * @author nick
@@ -84,6 +85,8 @@ public class RedisLock {
             String newKey = getKey(namespace, key);
 			String value = redisHelper.getString(newKey);
 			if(value == null) {
+				// 存在一种场景，在debug模式下，因为断点，所有线程都没有按时执行，导致redis锁被释放了，这时候就会出现这种情况
+				// 这种情况属于debug本地开发情况，所以暂不进行处理
 				LOGGER.error("renewalLock namespace:{}, key:{}, lock not exist", namespace, key);
 				return false;
 			} else if (!value.equals(lockUuid)) {
