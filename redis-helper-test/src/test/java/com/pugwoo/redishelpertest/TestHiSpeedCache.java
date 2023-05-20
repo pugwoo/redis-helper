@@ -1,12 +1,18 @@
 package com.pugwoo.redishelpertest;
 
+import com.pugwoo.redishelpertest.cache.ComplicatedDO;
 import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
 import com.pugwoo.wooutils.json.JSON;
+import com.pugwoo.wooutils.utils.TimeUtils;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-
-import java.util.*;
 
 @SpringBootTest
 public class TestHiSpeedCache {
@@ -33,7 +39,7 @@ public class TestHiSpeedCache {
         assert (end - start) >= 9000 && (end - start) <= 9100;
         assert withCacheDemoService.getSomethingCount() - somethingCount == 3; // 实际也执行了3次
     }
-    
+
     /** 缓存null值 */
     @Test
     public void testWithCache() throws Exception {
@@ -53,15 +59,15 @@ public class TestHiSpeedCache {
         assert (end - start) >= 3000 && (end - start) < 3800;
         assert withCacheDemoService.getSomethingWithCacheCount() == 1;  // 目标方法实际只执行了一次
     }
-    
+
     /** 缓存null值 */
     @Test
     public void testWithCache2() throws Exception {
         Thread.sleep(15000); // 等待缓存过期，缓存的continueFetchSecond是10秒
-        
+
         withCacheDemoService.resetSomethingWithCacheCount();
         long start = System.currentTimeMillis();
-        
+
         String str;
         // 100ms * 100 = 10s
         // 第一次调用sleep了3s
@@ -73,11 +79,11 @@ public class TestHiSpeedCache {
         }
         Thread.sleep(20000); // sleep的时候后台一直在fetch数据
         long end = System.currentTimeMillis();
-        
+
         // 共计 10s + 3s +20s = 33s
         System.out.println("cost:" + (end - start) + "ms");
         assert (end - start) >= 33000 && (end - start) < 35500; // 这里由原来的34秒，放宽到35.5秒，因为网络延迟
-        
+
         // String getSomethingWithCache is start    @ 2021-07-25 01:04:15
         // String getSomethingWithCache is executed @ 2021-07-25 01:04:18  第一次调用
         // String getSomethingWithCache is start    @ 2021-07-25 01:04:22
@@ -93,14 +99,14 @@ public class TestHiSpeedCache {
         System.out.println(withCacheDemoService.getSomethingWithCacheCount());
         assert withCacheDemoService.getSomethingWithCacheCount() == 6;
     }
-    
+
     /** 不缓存null值 */
     @Test
     public void testWithNotCacheNullValue() throws Exception {
         Thread.sleep(15000); // 等待缓存过期，缓存的continueFetchSecond是10秒
-        
+
         withCacheDemoService.resetSomethingWithCacheCount();
-        
+
         long start = System.currentTimeMillis();
         String str = withCacheDemoService.getSomethingWithNotCacheNullValue();
         assert str == null;
@@ -112,7 +118,7 @@ public class TestHiSpeedCache {
         assert str == null;
         System.out.println(str + new Date());
         long end = System.currentTimeMillis();
-        
+
         System.out.println("cost:" + (end - start) + "ms");
         assert (end - start) >= 9000 && (end - start) < 9900;
         System.out.println(withCacheDemoService.getSomethingWithCacheCount());
@@ -121,7 +127,7 @@ public class TestHiSpeedCache {
         //  fetch             1        2        3        3        3                        5times max
         // 当前时间在 9~10 秒之间 调用执行了3次 continueFetch执行了两次
         assert withCacheDemoService.getSomethingWithCacheCount() == 5;
-        
+
         Thread.sleep(2000);  // 11 second
         System.out.println(withCacheDemoService.getSomethingWithCacheCount());
         assert withCacheDemoService.getSomethingWithCacheCount() == 6;
@@ -284,4 +290,55 @@ public class TestHiSpeedCache {
     public void testWarningLog() {
         withCacheDemoService.withParam("hi");
     }
+
+
+    @Test
+    public void testPerformance() {
+
+        TimeUtils.printExecutionTime("testCache",
+                () -> {
+                    for (int i = 0; i < 200_0000; i++) {
+                        withCacheDemoService.testPerformance("hi");
+                    }
+                });
+
+        HashMap<String, String> map = new HashMap<>();
+        map.put("hi", "hi");
+        TimeUtils.printExecutionTime("testMap",
+                () -> {
+                    for (int i = 0; i < 200_0000; i++) {
+                        map.get("hi");
+                    }
+                });
+        map.clear();
+
+        TimeUtils.printExecutionTime("testPerformanceWithoutClone",
+                () -> {
+                    for (int i = 0; i < 200_0000; i++) {
+                        withCacheDemoService.testPerformanceWithoutClone("hi");
+                    }
+                });
+
+        TimeUtils.printExecutionTime("testPerformanceWithClone",
+                () -> {
+                    for (int i = 0; i < 200_0000; i++) {
+                        withCacheDemoService.testPerformanceWithClone("hi");
+                    }
+                });
+
+        HashMap<String, ComplicatedDO> map2 = new HashMap<>();
+
+        map2.put("testMap2", new ComplicatedDO());
+        TimeUtils.printExecutionTime("testMap2",
+                () -> {
+                    for (int i = 0; i < 200_0000; i++) {
+                        int hashCode = map2.get("testMap2").hashCode();
+                    }
+                });
+
+
+
+    }
+
+
 }

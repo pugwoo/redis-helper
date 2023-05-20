@@ -1,11 +1,15 @@
 package com.pugwoo.redishelpertest.cache;
 
 import com.pugwoo.wooutils.cache.HiSpeedCache;
-import org.springframework.stereotype.Service;
-
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.stereotype.Service;
 
 /**
  * 这里测试的接口都sleep 3秒，故意制造比较慢的
@@ -37,7 +41,7 @@ public class WithCacheDemoService {
         System.out.println("String getSomethingWithCache is executed @ " + df.format(new Date()));
         return null; // 测试缓存null值
     }
-    
+
     @HiSpeedCache(expireSecond = 4, continueFetchSecond = 10,
             useRedis = true, cacheRedisDataMillisecond = 300, cloneReturn = false)
     public String getSomethingWithCache2() throws Exception {
@@ -48,7 +52,7 @@ public class WithCacheDemoService {
         System.out.println("String getSomethingWithCache is executed @ " + df.format(new Date()));
         return null;
     }
-    
+
     @HiSpeedCache(expireSecond = 1, continueFetchSecond = 10, cacheNullValue = false, cloneReturn = false)
     public String getSomethingWithNotCacheNullValue() throws Exception {
         getSomethingWithCache.incrementAndGet();
@@ -119,4 +123,25 @@ public class WithCacheDemoService {
     public String withParam(String param) {
         return param;
     }
+
+
+    @HiSpeedCache(expireSecond = 1000, keyScript = "args[0]")
+    public String testPerformance(String param) {
+        return param;
+    }
+
+
+
+    @HiSpeedCache(expireSecond = 1000, keyScript = "args[0]", cloneReturn = false)
+    public ComplicatedDO testPerformanceWithoutClone(String param) {
+        return new ComplicatedDO();
+    }
+
+
+    @HiSpeedCache(expireSecond = 1000, keyScript = "args[0]")
+    public ComplicatedDO testPerformanceWithClone(String param) {
+        return new ComplicatedDO();
+    }
+
+
 }
