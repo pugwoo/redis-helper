@@ -4,7 +4,6 @@ import com.pugwoo.redishelpertest.redis.sync.HeartbeatTestService;
 import com.pugwoo.redishelpertest.redis.sync.HelloService;
 import com.pugwoo.redishelpertest.redis.sync.ThrowIfNotGetLockTestService;
 import com.pugwoo.wooutils.redis.NotGetLockException;
-import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.RedisSyncContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,8 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @SpringBootTest
 public class TestSync {
-	@Autowired
-	private RedisHelper redisHelper;
+
 	@Autowired
 	private HelloService helloService;
 	@Autowired
