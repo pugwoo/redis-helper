@@ -128,6 +128,11 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     @Around("@annotation(com.pugwoo.wooutils.cache.HiSpeedCache) execution(* *.*(..))")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        boolean disable = HiSpeedCacheContext.getDisable();
+        if (disable) {
+            return pjp.proceed();
+        }
+
         MethodSignature signature = (MethodSignature) pjp.getSignature();
         Method targetMethod = signature.getMethod();
         HiSpeedCache hiSpeedCache = targetMethod.getAnnotation(HiSpeedCache.class);
@@ -154,34 +159,37 @@ public class HiSpeedCacheAspect implements InitializingBean {
         // 缓存到本地的配置
         int cacheRedisDataMillisecond = hiSpeedCache.cacheRedisDataMillisecond();
         boolean cacheRedisData = cacheRedisDataMillisecond > 0;
-        
-        // 查看数据是否有命中，有则直接返回
-        if(useRedis) {
-            // 如果设置了缓存redis数据到本地，则尝试获取本地缓存数据
-            if (cacheRedisData) {
+
+        boolean forceRefresh = HiSpeedCacheContext.getForceRefresh();
+        if (!forceRefresh) { // 非强制刷新，才走缓存逻辑
+            // 查看数据是否有命中，有则直接返回
+            if(useRedis) {
+                // 如果设置了缓存redis数据到本地，则尝试获取本地缓存数据
+                if (cacheRedisData) {
+                    Object cacheData = getCacheData(cacheKey);
+                    if (cacheData != null) {
+                        return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, type);
+                    }
+                }
+
+                String value = redisHelper.getString(cacheKey);
+                if(value != null) { // == null则缓存没命中，应该走下面调用逻辑
+                    Object result = NULL_VALUE.equals(value) ? null : parseJson(value, targetMethod, type);
+                    if (cacheRedisData) { // 缓存到本地
+                        putCacheData(cacheKey, result == null ? NULL_VALUE : result,
+                                cacheRedisDataMillisecond + System.currentTimeMillis());
+                    }
+                    return result; // 因为这个值是新构造的，也没有缓存，所以不需要processClone
+                }
+            } else {
                 Object cacheData = getCacheData(cacheKey);
                 if (cacheData != null) {
                     return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, type);
                 }
             }
-
-            String value = redisHelper.getString(cacheKey);
-            if(value != null) { // == null则缓存没命中，应该走下面调用逻辑
-                Object result = NULL_VALUE.equals(value) ? null : parseJson(value, targetMethod, type);
-                if (cacheRedisData) { // 缓存到本地
-                    putCacheData(cacheKey, result == null ? NULL_VALUE : result,
-                            cacheRedisDataMillisecond + System.currentTimeMillis());
-                }
-                return result; // 因为这个值是新构造的，也没有缓存，所以不需要processClone
-            }
-        } else {
-            Object cacheData = getCacheData(cacheKey);
-            if (cacheData != null) {
-                return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, type);
-            }
         }
 
-        // 当缓存中没有时进行
+        // 强制刷新或缓存没有命中时，走下面的逻辑
         Object ret = pjp.proceed();
         
         boolean cacheNullValue = hiSpeedCache.cacheNullValue();
