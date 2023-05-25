@@ -1,5 +1,7 @@
 package com.pugwoo.wooutils.redis;
 
+import java.util.Objects;
+
 /**
  * 频率控制周期
  * @author nick
@@ -45,7 +47,7 @@ public enum RedisLimitPeroidEnum {
 	
 	public static RedisLimitPeroidEnum getByCode(String code) {
 		for(RedisLimitPeroidEnum e : RedisLimitPeroidEnum.values()) {
-			if(code == null && code == e.getCode() || code.equals(e.getCode())) {
+			if(Objects.equals(code, e.getCode())) {
 				return e;
 			}
 		}

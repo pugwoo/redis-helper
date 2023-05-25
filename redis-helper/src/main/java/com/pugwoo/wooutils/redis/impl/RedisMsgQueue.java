@@ -145,8 +145,8 @@ public class RedisMsgQueue {
             
             int msgResultIndex = i * 2;
             int pendingResultIndex = msgResultIndex + 1;
-            Object msgResult = sendResultSize > msgResultIndex ? sendResultList.get(msgResultIndex) : null;
-            Object pendingResult = sendResultSize > pendingResultIndex ? sendResultList.get(pendingResultIndex) : null;
+            Object msgResult = sendResultSize > msgResultIndex && sendResultList != null ? sendResultList.get(msgResultIndex) : null;
+            Object pendingResult = sendResultSize > pendingResultIndex && sendResultList != null ? sendResultList.get(pendingResultIndex) : null;
             
             boolean success = true;
             if (msgResult == null || pendingResult == null) {

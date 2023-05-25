@@ -37,17 +37,19 @@ public class RedisSyncAspect implements InitializingBean {
 
     private static volatile HeartbeatRenewalTask heartbeatRenewalTask = null; // 不需要多线程
 
+    private long startTimestamp = System.currentTimeMillis();
+
     @Override
     public void afterPropertiesSet() {
+        long cost = System.currentTimeMillis() - startTimestamp;
         if (redisHelper == null) {
             LOGGER.error("redisHelper is null, RedisSyncAspect will pass through all method call");
         } else {
             heartbeatRenewalTask = new HeartbeatRenewalTask();
             heartbeatRenewalTask.setName("RedisSyncAspect-heartbeat-renewal-thread");
             heartbeatRenewalTask.start();
-            LOGGER.info("@Synchronized init success.");
+            LOGGER.info("@Synchronized init success, cost:{} ms.", cost);
         }
-
     }
 
     /**
