@@ -3,6 +3,7 @@ package com.pugwoo.wooutils.cache;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import com.pugwoo.wooutils.utils.ClassUtils;
+import com.pugwoo.wooutils.utils.InnerCommonUtils;
 import com.rits.cloning.Cloner;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -136,6 +137,13 @@ public class HiSpeedCacheAspect implements InitializingBean {
         MethodSignature signature = (MethodSignature) pjp.getSignature();
         Method targetMethod = signature.getMethod();
         HiSpeedCache hiSpeedCache = targetMethod.getAnnotation(HiSpeedCache.class);
+
+        // 确定是否走缓存
+        boolean cacheCondition = evalCacheConditionScript(pjp, hiSpeedCache);
+        if (!cacheCondition) {
+            return pjp.proceed();
+        }
+
         boolean useRedis = checkUseRedis(hiSpeedCache);
 
         ParameterizedType type = null;
@@ -289,8 +297,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private String generateKey(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache) {
         String key = "";
 
-        String keyScript = hiSpeedCache.keyScript().trim();
-        if (!keyScript.isEmpty()) {
+        String keyScript = hiSpeedCache.keyScript();
+        if (InnerCommonUtils.isNotBlank(keyScript)) {
             Map<String, Object> context = new HashMap<>();
             context.put("args", pjp.getArgs()); // 类型是Object[]
 
@@ -307,6 +315,25 @@ public class HiSpeedCacheAspect implements InitializingBean {
         }
 
         return key;
+    }
+
+    private boolean evalCacheConditionScript(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache) {
+        String cacheConditionScript = hiSpeedCache.cacheConditionScript();
+        if (InnerCommonUtils.isNotBlank(cacheConditionScript)) {
+            Map<String, Object> context = new HashMap<>();
+            context.put("args", pjp.getArgs()); // 类型是Object[]
+
+            try {
+                Object result = MVEL.eval(cacheConditionScript, context);
+                return (result instanceof Boolean) && (Boolean) result;
+            } catch (Exception e) {
+                LOGGER.error("HiSpeedCache cacheConditionScript eval error, method:{}, script:{}",
+                        ((MethodSignature) pjp.getSignature()).getMethod().getName(), cacheConditionScript, e);
+                return false;
+            }
+        } else {
+            return true;
+        }
     }
 
     private boolean checkUseRedis(HiSpeedCache hiSpeedCache) {

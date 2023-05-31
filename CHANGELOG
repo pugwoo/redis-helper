@@ -1,4 +1,4 @@
-v1.2.7 -
+v1.2.7 - [add] HiSpeedCache支持通过cacheConditionScript配置是否走缓存
 
 2023年5月25日
 v1.2.6 - [enhance] 初始化@Synchronized和@HiSpeedCache后，打印初始化耗时
