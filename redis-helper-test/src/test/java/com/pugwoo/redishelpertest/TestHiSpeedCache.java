@@ -284,4 +284,25 @@ public class TestHiSpeedCache {
     public void testWarningLog() {
         withCacheDemoService.withParam("hi");
     }
+
+    @Test
+    public void testCacheCondition() throws Exception {
+
+        long start = System.currentTimeMillis();
+        for (int i = 0; i < 5; i++) {
+            withCacheDemoService.getSomethingWithCacheCondition("pugwoo");
+        }
+        long end = System.currentTimeMillis();
+        System.out.println("cost:" + (end - start) + "ms");
+        assert (end - start) < 1100; // 走了缓存
+
+        start = System.currentTimeMillis();
+        for (int i = 0; i < 5; i++) {
+            withCacheDemoService.getSomethingWithCacheCondition("hello"); // 这个参数走不到索引
+        }
+        end = System.currentTimeMillis();
+        System.out.println("cost:" + (end - start) + "ms");
+        assert (end - start) > 5000; // 没走缓存
+    }
+
 }
