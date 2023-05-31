@@ -17,12 +17,16 @@ public class HiSpeedCacheContext {
     private static final ThreadLocal<Boolean> disableOnce = new ThreadLocal<>();
 
     /**
-     * 设置本次缓存走强制刷新，每次设置不管最终调用成功还是失败，都只生效一次，如需要继续强制刷新，需要再次设置
+     * 设置本次缓存走强制刷新，每次设置不管最终调用成功还是失败，都只强制刷新一次，如需要继续强制刷新，需要再次设置。
+     * 当强制刷新成功时，调用结果将更新到缓存中。
      */
     public static void forceRefreshOnce() {
         forceRefreshOnce.set(true);
     }
 
+    /**
+     * 设置本次缓存不走，即不走缓存，也不更新缓存。
+     */
     public static void disableOnce() {
         disableOnce.set(true);
     }
