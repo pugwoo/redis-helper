@@ -9,7 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.util.*;
 
 @SpringBootTest
-public class TestHiSpeedCache {
+public class TestHiSpeedCacheAbstract {
 
     @Autowired
     private WithCacheDemoService withCacheDemoService;
