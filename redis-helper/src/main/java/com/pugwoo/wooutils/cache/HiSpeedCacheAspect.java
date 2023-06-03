@@ -393,10 +393,21 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 return data;
             }
 
-            if (type == null) {
-                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
+            // 如果有提供自定义的快速克隆方法，就使用自定义的
+            Class<?> customCloner = hiSpeedCache.customCloner();
+            if (customCloner == null || customCloner == void.class) {
+                if (type == null) {
+                    return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
+                } else {
+                    return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
+                }
             } else {
-                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
+                try {
+                    CustomCloner cc = (CustomCloner) customCloner.newInstance();
+                    return cc.clone(data);
+                } catch (InstantiationException | IllegalAccessException e) {
+                    throw new RuntimeException(e);
+                }
             }
         } else {
             return data;
