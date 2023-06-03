@@ -4,7 +4,6 @@ import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import com.pugwoo.wooutils.utils.ClassUtils;
 import com.pugwoo.wooutils.utils.InnerCommonUtils;
-import com.rits.cloning.Cloner;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -43,11 +42,6 @@ public class HiSpeedCacheAspect implements InitializingBean {
      * 缓存null值是避免缓存穿透
      **/
     private static final String NULL_VALUE = "(NULL)HiSpeedCache@DpK3GovAptNICKAndKarenXSysudYrY";
-
-    // 记录快速克隆的失败次数
-    private final Integer FAST_CLONE_FAIL_THRESHOLD = 10;
-    private final AtomicInteger fastCloneFailCount = new AtomicInteger();
-    private final Cloner cloner = new Cloner();
 
     private final long startTimestamp = System.currentTimeMillis();
 
@@ -399,34 +393,11 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 return data;
             }
 
-            if (fastCloneFailCount.get() > FAST_CLONE_FAIL_THRESHOLD) {
-                if (type == null) {
-                    return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
-                } else {
-                    return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
-                }
+            if (type == null) {
+                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
             } else {
-                // 优先使用kostaskougios cloning工具进行克隆，其性能是json的将近10倍
-                try {
-                    return cloner.deepClone(data);
-                } catch (Throwable e) {
-                    int failCount = fastCloneFailCount.incrementAndGet();
-                    if (failCount > FAST_CLONE_FAIL_THRESHOLD) {
-                        LOGGER.warn("fastclone fail more than {} times, will disable fastclone, failCount:{}",
-                                FAST_CLONE_FAIL_THRESHOLD, failCount, e);
-                    } else {
-                        LOGGER.warn("fastclone fail, will try use json clone, failCount:{}", failCount, e);
-                    }
-
-                    // 如果克隆失败，则尝试用json进行克隆
-                    if (type == null) {
-                        return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
-                    } else {
-                        return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
-                    }
-                }
+                return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
             }
-
         } else {
             return data;
         }
