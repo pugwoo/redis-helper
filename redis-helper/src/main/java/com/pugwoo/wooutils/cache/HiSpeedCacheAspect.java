@@ -210,12 +210,14 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
             if(useRedis) {
                 if(ret != null) {
-                    redisHelper.setObject(cacheKey, expireSecond, ret);
+                    // redis的缓存设置为超时时间的2倍，这里不应该使用continueFetchSecond，原因是如果所有的java应用重启，此时刷新任务是终止的
+                    // 如果redis的缓存时间很长，那么数据将长期不会被更新
+                    redisHelper.setObject(cacheKey, hiSpeedCache.expireSecond() * 2, ret);
                     if (cacheRedisData) {
                         putCacheData(cacheKey, ret, cacheRedisDataMillisecond + System.currentTimeMillis());
                     }
                 } else if (cacheNullValue) {
-                    redisHelper.setString(cacheKey, expireSecond, NULL_VALUE); // 缓存null值
+                    redisHelper.setString(cacheKey, hiSpeedCache.expireSecond() * 2, NULL_VALUE); // 缓存null值
                     if (cacheRedisData) {
                         putCacheData(cacheKey, NULL_VALUE, cacheRedisDataMillisecond + System.currentTimeMillis());
                     }
@@ -557,9 +559,9 @@ public class HiSpeedCacheAspect implements InitializingBean {
                                         int expireSecond = Math.max(continueFetchDTO.hiSpeedCache.expireSecond(),
                                                 continueFetchDTO.hiSpeedCache.continueFetchSecond());
                                         if(result != null) {
-                                            redisHelper.setObject(cacheKey, expireSecond , result);
+                                            redisHelper.setObject(cacheKey, continueFetchDTO.hiSpeedCache.expireSecond() * 2 , result);
                                         } else {
-                                            redisHelper.setString(cacheKey, expireSecond, NULL_VALUE);
+                                            redisHelper.setString(cacheKey, continueFetchDTO.hiSpeedCache.expireSecond() * 2, NULL_VALUE);
                                         }
                                     } else {
                                         if(result != null) {

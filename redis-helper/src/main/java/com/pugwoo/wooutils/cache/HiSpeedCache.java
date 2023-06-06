@@ -62,6 +62,7 @@ public @interface HiSpeedCache {
      * 是否使用redis保存数据，默认关闭。<br>
      * 只有当前是Spring容器且有RedisHelper的bean时，useRedis=true才生效，否则等价于useRedis=false，即便设置为true。<br>
      * 当使用useRedis=true时，cloneReturn选项失效。<br>
+     * 当使用redis保存数据时，数据的失效时长为expireSecond的2倍。
      */
     boolean useRedis() default false;
     
