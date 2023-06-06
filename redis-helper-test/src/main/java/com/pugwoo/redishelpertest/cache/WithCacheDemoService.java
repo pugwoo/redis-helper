@@ -119,4 +119,13 @@ public class WithCacheDemoService {
     public String withParam(String param) {
         return param;
     }
+
+
+    // cacheCondition测试
+    @HiSpeedCache(expireSecond = 10, cacheConditionScript = "'pugwoo'.equals(args[0])", keyScript = "args[0]")
+    public String getSomethingWithCacheCondition(String name) throws Exception {
+        Thread.sleep(1000);
+        return "hello";
+    }
+
 }

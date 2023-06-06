@@ -6,7 +6,7 @@
 	<groupId>com.pugwoo</groupId>
 	<artifactId>redis-helper</artifactId>
 	<packaging>jar</packaging>
-	<version>1.2.6</version>
+	<version>1.2.7</version>
 
 	<name>redis-helper</name>
 	<description>a useful redis client with interesting feature</description>
@@ -71,13 +71,6 @@
             <groupId>redis.clients</groupId>
             <artifactId>jedis</artifactId>
             <version>3.10.0</version>
-        </dependency>
-
-        <!-- java object clone tools -->
-        <dependency>
-            <groupId>io.github.kostaskougios</groupId>
-            <artifactId>cloning</artifactId>
-            <version>1.10.3</version>
         </dependency>
 
 		<!-- optional依赖： Redis的分布式锁注解方式使用时，需要该依赖，实际上依赖Spring容器-->

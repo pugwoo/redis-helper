@@ -3,7 +3,7 @@ package com.pugwoo.wooutils.cache;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import com.pugwoo.wooutils.utils.ClassUtils;
-import com.rits.cloning.Cloner;
+import com.pugwoo.wooutils.utils.InnerCommonUtils;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.core.annotation.Order;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -33,6 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @EnableAspectJAutoProxy
 @Aspect
+@Order(1000)
 public class HiSpeedCacheAspect implements InitializingBean {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HiSpeedCacheAspect.class);
@@ -42,11 +44,6 @@ public class HiSpeedCacheAspect implements InitializingBean {
      * 缓存null值是避免缓存穿透
      **/
     private static final String NULL_VALUE = "(NULL)HiSpeedCache@DpK3GovAptNICKAndKarenXSysudYrY";
-
-    // 记录快速克隆的失败次数
-    private final Integer FAST_CLONE_FAIL_THRESHOLD = 10;
-    private final AtomicInteger fastCloneFailCount = new AtomicInteger();
-    private final Cloner cloner = new Cloner();
 
     private final long startTimestamp = System.currentTimeMillis();
 
@@ -136,6 +133,13 @@ public class HiSpeedCacheAspect implements InitializingBean {
         MethodSignature signature = (MethodSignature) pjp.getSignature();
         Method targetMethod = signature.getMethod();
         HiSpeedCache hiSpeedCache = targetMethod.getAnnotation(HiSpeedCache.class);
+
+        // 确定是否走缓存
+        boolean cacheCondition = evalCacheConditionScript(pjp, hiSpeedCache);
+        if (!cacheCondition) {
+            return pjp.proceed();
+        }
+
         boolean useRedis = checkUseRedis(hiSpeedCache);
 
         ParameterizedType type = null;
@@ -206,12 +210,14 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
             if(useRedis) {
                 if(ret != null) {
-                    redisHelper.setObject(cacheKey, expireSecond, ret);
+                    // redis的缓存设置为超时时间的2倍，这里不应该使用continueFetchSecond，原因是如果所有的java应用重启，此时刷新任务是终止的
+                    // 如果redis的缓存时间很长，那么数据将长期不会被更新
+                    redisHelper.setObject(cacheKey, hiSpeedCache.expireSecond() * 2, ret);
                     if (cacheRedisData) {
                         putCacheData(cacheKey, ret, cacheRedisDataMillisecond + System.currentTimeMillis());
                     }
                 } else if (cacheNullValue) {
-                    redisHelper.setString(cacheKey, expireSecond, NULL_VALUE); // 缓存null值
+                    redisHelper.setString(cacheKey, hiSpeedCache.expireSecond() * 2, NULL_VALUE); // 缓存null值
                     if (cacheRedisData) {
                         putCacheData(cacheKey, NULL_VALUE, cacheRedisDataMillisecond + System.currentTimeMillis());
                     }
@@ -289,8 +295,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private String generateKey(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache) {
         String key = "";
 
-        String keyScript = hiSpeedCache.keyScript().trim();
-        if (!keyScript.isEmpty()) {
+        String keyScript = hiSpeedCache.keyScript();
+        if (InnerCommonUtils.isNotBlank(keyScript)) {
             Map<String, Object> context = new HashMap<>();
             context.put("args", pjp.getArgs()); // 类型是Object[]
 
@@ -307,6 +313,25 @@ public class HiSpeedCacheAspect implements InitializingBean {
         }
 
         return key;
+    }
+
+    private boolean evalCacheConditionScript(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache) {
+        String cacheConditionScript = hiSpeedCache.cacheConditionScript();
+        if (InnerCommonUtils.isNotBlank(cacheConditionScript)) {
+            Map<String, Object> context = new HashMap<>();
+            context.put("args", pjp.getArgs()); // 类型是Object[]
+
+            try {
+                Object result = MVEL.eval(cacheConditionScript, context);
+                return (result instanceof Boolean) && (Boolean) result;
+            } catch (Exception e) {
+                LOGGER.error("HiSpeedCache cacheConditionScript eval error, method:{}, script:{}",
+                        ((MethodSignature) pjp.getSignature()).getMethod().getName(), cacheConditionScript, e);
+                return false;
+            }
+        } else {
+            return true;
+        }
     }
 
     private boolean checkUseRedis(HiSpeedCache hiSpeedCache) {
@@ -372,34 +397,22 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 return data;
             }
 
-            if (fastCloneFailCount.get() > FAST_CLONE_FAIL_THRESHOLD) {
+            // 如果有提供自定义的快速克隆方法，就使用自定义的
+            Class<?> customCloner = hiSpeedCache.customCloner();
+            if (customCloner == null || customCloner == void.class) {
                 if (type == null) {
                     return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
                 } else {
                     return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
                 }
             } else {
-                // 优先使用kostaskougios cloning工具进行克隆，其性能是json的将近10倍
                 try {
-                    return cloner.deepClone(data);
-                } catch (Throwable e) {
-                    int failCount = fastCloneFailCount.incrementAndGet();
-                    if (failCount > FAST_CLONE_FAIL_THRESHOLD) {
-                        LOGGER.warn("fastclone fail more than {} times, will disable fastclone, failCount:{}",
-                                FAST_CLONE_FAIL_THRESHOLD, failCount, e);
-                    } else {
-                        LOGGER.warn("fastclone fail, will try use json clone, failCount:{}", failCount, e);
-                    }
-
-                    // 如果克隆失败，则尝试用json进行克隆
-                    if (type == null) {
-                        return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), clazz);
-                    } else {
-                        return JsonRedisObjectConverter.parse(JsonRedisObjectConverter.toJson(data), type);
-                    }
+                    CustomCloner cc = (CustomCloner) customCloner.newInstance();
+                    return cc.clone(data);
+                } catch (InstantiationException | IllegalAccessException e) {
+                    throw new RuntimeException(e);
                 }
             }
-
         } else {
             return data;
         }
@@ -546,9 +559,9 @@ public class HiSpeedCacheAspect implements InitializingBean {
                                         int expireSecond = Math.max(continueFetchDTO.hiSpeedCache.expireSecond(),
                                                 continueFetchDTO.hiSpeedCache.continueFetchSecond());
                                         if(result != null) {
-                                            redisHelper.setObject(cacheKey, expireSecond , result);
+                                            redisHelper.setObject(cacheKey, continueFetchDTO.hiSpeedCache.expireSecond() * 2 , result);
                                         } else {
-                                            redisHelper.setString(cacheKey, expireSecond, NULL_VALUE);
+                                            redisHelper.setString(cacheKey, continueFetchDTO.hiSpeedCache.expireSecond() * 2, NULL_VALUE);
                                         }
                                     } else {
                                         if(result != null) {

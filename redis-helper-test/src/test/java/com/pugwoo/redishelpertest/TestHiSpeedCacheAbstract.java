@@ -3,55 +3,51 @@ package com.pugwoo.redishelpertest;
 import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
 import com.pugwoo.wooutils.json.JSON;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.*;
 
-@SpringBootTest
-public class TestHiSpeedCache {
+public abstract class TestHiSpeedCacheAbstract {
 
-    @Autowired
-    private WithCacheDemoService withCacheDemoService;
+    public abstract WithCacheDemoService getWithCacheDemoService();
 
     @Test
     public void testNoCache() throws Exception {
-        Integer somethingCount = withCacheDemoService.getSomethingCount();
+        Integer somethingCount = getWithCacheDemoService().getSomethingCount();
 
         long start = System.currentTimeMillis();
-        String str = withCacheDemoService.getSomething(3);
+        String str = getWithCacheDemoService().getSomething(3);
         assert str.equals("hello");
 
-        str = withCacheDemoService.getSomething(3);
+        str = getWithCacheDemoService().getSomething(3);
         assert str.equals("hello");
 
-        str = withCacheDemoService.getSomething(3);
+        str = getWithCacheDemoService().getSomething(3);
         assert str.equals("hello");
         long end = System.currentTimeMillis();
 
         System.out.println("cost:" + (end - start) + "ms");
         assert (end - start) >= 9000 && (end - start) <= 9100;
-        assert withCacheDemoService.getSomethingCount() - somethingCount == 3; // 实际也执行了3次
+        assert getWithCacheDemoService().getSomethingCount() - somethingCount == 3; // 实际也执行了3次
     }
     
     /** 缓存null值 */
     @Test
     public void testWithCache() throws Exception {
-        withCacheDemoService.resetSomethingWithCacheCount();
+        getWithCacheDemoService().resetSomethingWithCacheCount();
 
         long start = System.currentTimeMillis();
-        String str = withCacheDemoService.getSomethingWithCache();
+        String str = getWithCacheDemoService().getSomethingWithCache();
         assert str == null;
 
-        str = withCacheDemoService.getSomethingWithCache(); // 这次调用就直接走了缓存
+        str = getWithCacheDemoService().getSomethingWithCache(); // 这次调用就直接走了缓存
         assert str == null;
-        str = withCacheDemoService.getSomethingWithCache(); // 这次调用就直接走了缓存
+        str = getWithCacheDemoService().getSomethingWithCache(); // 这次调用就直接走了缓存
         assert str == null;
         long end = System.currentTimeMillis();
 
         System.out.println("cost:" + (end - start) + "ms");
         assert (end - start) >= 3000 && (end - start) < 3800;
-        assert withCacheDemoService.getSomethingWithCacheCount() == 1;  // 目标方法实际只执行了一次
+        assert getWithCacheDemoService().getSomethingWithCacheCount() == 1;  // 目标方法实际只执行了一次
     }
     
     /** 缓存null值 */
@@ -59,14 +55,14 @@ public class TestHiSpeedCache {
     public void testWithCache2() throws Exception {
         Thread.sleep(15000); // 等待缓存过期，缓存的continueFetchSecond是10秒
         
-        withCacheDemoService.resetSomethingWithCacheCount();
+        getWithCacheDemoService().resetSomethingWithCacheCount();
         long start = System.currentTimeMillis();
         
         String str;
         // 100ms * 100 = 10s
         // 第一次调用sleep了3s
         for (int i = 0; i < 100; i++) {
-            str = withCacheDemoService.getSomethingWithCache2();
+            str = getWithCacheDemoService().getSomethingWithCache2();
             // System.out.println(str + " " + new Date());
             assert str == null;
             Thread.sleep(100);
@@ -90,8 +86,8 @@ public class TestHiSpeedCache {
         // String getSomethingWithCache is executed @ 2021-07-25 01:04:37  第四次fetch
         // String getSomethingWithCache is start    @ 2021-07-25 01:04:38
         // String getSomethingWithCache is executed @ 2021-07-25 01:04:41  第五次fetch
-        System.out.println(withCacheDemoService.getSomethingWithCacheCount());
-        assert withCacheDemoService.getSomethingWithCacheCount() == 6;
+        System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
+        assert getWithCacheDemoService().getSomethingWithCacheCount() == 6;
     }
     
     /** 不缓存null值 */
@@ -99,57 +95,57 @@ public class TestHiSpeedCache {
     public void testWithNotCacheNullValue() throws Exception {
         Thread.sleep(15000); // 等待缓存过期，缓存的continueFetchSecond是10秒
         
-        withCacheDemoService.resetSomethingWithCacheCount();
+        getWithCacheDemoService().resetSomethingWithCacheCount();
         
         long start = System.currentTimeMillis();
-        String str = withCacheDemoService.getSomethingWithNotCacheNullValue();
+        String str = getWithCacheDemoService().getSomethingWithNotCacheNullValue();
         assert str == null;
         System.out.println(str + new Date());
-        str = withCacheDemoService.getSomethingWithNotCacheNullValue(); // 这次调用不走缓存 目标方法被调用
+        str = getWithCacheDemoService().getSomethingWithNotCacheNullValue(); // 这次调用不走缓存 目标方法被调用
         assert str == null;
         System.out.println(str + new Date());
-        str = withCacheDemoService.getSomethingWithNotCacheNullValue(); // 这次调用不走缓存 目标方法被调用
+        str = getWithCacheDemoService().getSomethingWithNotCacheNullValue(); // 这次调用不走缓存 目标方法被调用
         assert str == null;
         System.out.println(str + new Date());
         long end = System.currentTimeMillis();
         
         System.out.println("cost:" + (end - start) + "ms");
         assert (end - start) >= 9000 && (end - start) < 9900;
-        System.out.println(withCacheDemoService.getSomethingWithCacheCount());
+        System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
         // second 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 ...
         //   call 1       12       23        3                                             3times
         //  fetch             1        2        3        3        3                        5times max
         // 当前时间在 9~10 秒之间 调用执行了3次 continueFetch执行了两次
-        assert withCacheDemoService.getSomethingWithCacheCount() == 5;
+        assert getWithCacheDemoService().getSomethingWithCacheCount() == 5;
         
         Thread.sleep(2000);  // 11 second
-        System.out.println(withCacheDemoService.getSomethingWithCacheCount());
-        assert withCacheDemoService.getSomethingWithCacheCount() == 6;
+        System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
+        assert getWithCacheDemoService().getSomethingWithCacheCount() == 6;
         Thread.sleep(3000);  // 14 second
-        System.out.println(withCacheDemoService.getSomethingWithCacheCount());
-        assert withCacheDemoService.getSomethingWithCacheCount() == 7;
+        System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
+        assert getWithCacheDemoService().getSomethingWithCacheCount() == 7;
         Thread.sleep(3500);  // 17.5 second // 原来是sleep 3000，但是17秒过于精确，这里调成17.5秒
-        System.out.println(withCacheDemoService.getSomethingWithCacheCount());
-        assert withCacheDemoService.getSomethingWithCacheCount() == 8;
+        System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
+        assert getWithCacheDemoService().getSomethingWithCacheCount() == 8;
         Thread.sleep(2500);  // 20 second
-        System.out.println(withCacheDemoService.getSomethingWithCacheCount());
-        assert withCacheDemoService.getSomethingWithCacheCount() == 8;
+        System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
+        assert getWithCacheDemoService().getSomethingWithCacheCount() == 8;
         Thread.sleep(3000);  // 20 second
-        System.out.println(withCacheDemoService.getSomethingWithCacheCount());
-        assert withCacheDemoService.getSomethingWithCacheCount() == 8;
+        System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
+        assert getWithCacheDemoService().getSomethingWithCacheCount() == 8;
         Thread.sleep(3000);  // 24 second
-        System.out.println(withCacheDemoService.getSomethingWithCacheCount());
-        assert withCacheDemoService.getSomethingWithCacheCount() == 8;
+        System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
+        assert getWithCacheDemoService().getSomethingWithCacheCount() == 8;
     }
 
     @Test
     public void testSomethingWithCacheCloneReturn() throws Exception {
         long start = System.currentTimeMillis();
-        Date date = withCacheDemoService.getSomethingWithCacheCloneReturn("hello");
+        Date date = getWithCacheDemoService().getSomethingWithCacheCloneReturn("hello");
         System.out.println(date + "," + new Date());
-        date = withCacheDemoService.getSomethingWithCacheCloneReturn("hello");
+        date = getWithCacheDemoService().getSomethingWithCacheCloneReturn("hello");
         System.out.println(date + "," + new Date());
-        date = withCacheDemoService.getSomethingWithCacheCloneReturn("hello");
+        date = getWithCacheDemoService().getSomethingWithCacheCloneReturn("hello");
         System.out.println(date + "," + new Date());
         long end = System.currentTimeMillis();
 
@@ -160,11 +156,11 @@ public class TestHiSpeedCache {
     @Test
     public void testSomethingWithRedis() throws Exception {
         long start = System.currentTimeMillis();
-        List<Date> dates = withCacheDemoService.getSomethingWithRedis();
+        List<Date> dates = getWithCacheDemoService().getSomethingWithRedis();
         System.out.println(dates + "," + new Date());
-        dates = withCacheDemoService.getSomethingWithRedis();
+        dates = getWithCacheDemoService().getSomethingWithRedis();
         System.out.println(dates + "," + new Date());
-        dates = withCacheDemoService.getSomethingWithRedis();
+        dates = getWithCacheDemoService().getSomethingWithRedis();
         assert dates.get(0) != null && dates.get(0) instanceof Date;
         System.out.println(dates + "," + new Date());
         long end = System.currentTimeMillis();
@@ -177,14 +173,14 @@ public class TestHiSpeedCache {
     public void testLittleBenchmark() throws Exception {
         System.out.println("start at " + new Date());
 
-        withCacheDemoService.getSomethingWithCache();
-        withCacheDemoService.resetSomethingWithCacheCount();
+        getWithCacheDemoService().getSomethingWithCache();
+        getWithCacheDemoService().resetSomethingWithCacheCount();
 
         int times = 10000000;
         // 测试调用1000万次的时间
         long start = System.currentTimeMillis();
         for(int i = 0; i < times; i++) {
-            withCacheDemoService.getSomethingWithCache();
+            getWithCacheDemoService().getSomethingWithCache();
         }
         long end = System.currentTimeMillis();
 
@@ -195,9 +191,9 @@ public class TestHiSpeedCache {
         double qps = times / (cost / 1000.0);
         System.out.println("qps:" + qps);
 
-        System.out.println("call count:" + withCacheDemoService.getSomethingWithCacheCount());
+        System.out.println("call count:" + getWithCacheDemoService().getSomethingWithCacheCount());
         assert qps > 100000;  // qps应该至少10万以上，正常都有100万
-        assert withCacheDemoService.getSomethingWithCacheCount() <= ((int)cost/1000);
+        assert getWithCacheDemoService().getSomethingWithCacheCount() <= ((int)cost/1000);
     }
 
     @Test
@@ -206,7 +202,7 @@ public class TestHiSpeedCache {
         int times = 10000000;
         long start = System.currentTimeMillis();
         for(int i = 0; i < times; i++) {
-            withCacheDemoService.getSomethingWithRedis();
+            getWithCacheDemoService().getSomethingWithRedis();
         }
         long end = System.currentTimeMillis();
 
@@ -226,9 +222,9 @@ public class TestHiSpeedCache {
         List<Long> costList = new ArrayList<>();
 
         long lastGetTime = System.currentTimeMillis();
-        String lastUuid = withCacheDemoService.getRandomString();
+        String lastUuid = getWithCacheDemoService().getRandomString();
         for (int i = 0; i < 10000; i++) {
-            String uuid = withCacheDemoService.getRandomString();
+            String uuid = getWithCacheDemoService().getRandomString();
             if (!uuid.equals(lastUuid)) { // uuid发生变化了，说明缓存失效了
                 long cost = System.currentTimeMillis() - lastGetTime;
                 System.out.println("cost:" + cost);
@@ -255,7 +251,7 @@ public class TestHiSpeedCache {
     public void testGeneric() throws Exception {
         for (int i = 0; i < 10; i++) {
 
-            List<Date> dates = withCacheDemoService.getSomeDateWithCache();
+            List<Date> dates = getWithCacheDemoService().getSomeDateWithCache();
             System.out.println(dates.get(0).getClass());
             System.out.println(JSON.toJson(dates));
 
@@ -267,7 +263,7 @@ public class TestHiSpeedCache {
         }
 
         for (int i = 0; i < 10; i++) {
-            Map<String, Date> dates = withCacheDemoService.getSomeDateWithCache2();
+            Map<String, Date> dates = getWithCacheDemoService().getSomeDateWithCache2();
             System.out.println(JSON.toJson(dates));
 
             dates.forEach((k, v) -> {
@@ -282,6 +278,27 @@ public class TestHiSpeedCache {
 
     @Test
     public void testWarningLog() {
-        withCacheDemoService.withParam("hi");
+        getWithCacheDemoService().withParam("hi");
     }
+
+    @Test
+    public void testCacheCondition() throws Exception {
+
+        long start = System.currentTimeMillis();
+        for (int i = 0; i < 5; i++) {
+            getWithCacheDemoService().getSomethingWithCacheCondition("pugwoo");
+        }
+        long end = System.currentTimeMillis();
+        System.out.println("cost:" + (end - start) + "ms");
+        assert (end - start) < 1100; // 走了缓存
+
+        start = System.currentTimeMillis();
+        for (int i = 0; i < 5; i++) {
+            getWithCacheDemoService().getSomethingWithCacheCondition("hello"); // 这个参数走不到索引
+        }
+        end = System.currentTimeMillis();
+        System.out.println("cost:" + (end - start) + "ms");
+        assert (end - start) > 5000; // 没走缓存
+    }
+
 }

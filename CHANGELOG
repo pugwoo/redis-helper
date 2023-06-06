@@ -1,3 +1,11 @@
+2023年6月6日
+v1.2.7 - [enhance] 设置HiSpeedCacheAspect切面的优先级为1000，RedisSyncAspect优先级为2000，高速缓存的优先级必须高于分布式锁。
+                   原因：1) 走缓存时不需要对目标方法加分布式锁；2) 高速缓存刷新时需要加分布式锁；
+       - [enhance] 当使用redis作为高速缓存的存储时，将缓存时长设置为超时时间的2倍，而不是最长保留时长continueFetchSecond
+       - [add] HiSpeedCache支持通过cacheConditionScript配置是否走缓存
+       - [del] 移除fastclone组件，现在jackson的耗时从之前1.5秒降到450ms，fastclone是140ms，从10倍降到3倍，不需要用fastclone了
+       - [enhance] 提供自定义clone接口，可以由用户手工实现，性能可以由jackson的450ms降到30ms，比fastclone快4倍
+
 2023年5月25日
 v1.2.6 - [enhance] 初始化@Synchronized和@HiSpeedCache后，打印初始化耗时
        - [add] 支持通过HiSpeedContext控制：强制刷新缓存或禁用缓存

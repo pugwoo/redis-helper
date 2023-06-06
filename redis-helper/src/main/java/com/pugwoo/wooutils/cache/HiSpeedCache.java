@@ -23,6 +23,13 @@ public @interface HiSpeedCache {
     String keyScript() default "";
 
     /**
+     * [可选] 是否走缓存的mvel表达式脚本，可以从参数列表变量args中获取<br>
+     * 当为空时，等价于"true"，即走缓存；当返回true时，走缓存；
+     * 当返回false时，不走缓存，直接调用目标方法；返回其它值时，打印异常log且不走缓存，直接调用目标方法<br>
+     */
+    String cacheConditionScript() default "";
+
+    /**
      * 高速缓存的超时时间，默认1秒，建议使用1到10秒
      */
     int expireSecond() default 1;
@@ -36,7 +43,6 @@ public @interface HiSpeedCache {
      * 高速缓存执行方法更新时，是否并行。
      * 默认为否，此时一个缓存最多只会由一个线程执行，一定程度可以缓解当方法比较慢时，堵住整个线程池。
      * 如果设置为true时，即使相同方法参数调用卡主了，仍然会在线程池中发起，堵住整个线程池的风险更大些。
-     * @return
      */
     boolean concurrentFetch() default false;
 
@@ -48,9 +54,15 @@ public @interface HiSpeedCache {
     boolean cloneReturn() default true;
 
     /**
+     * 指定自定义克隆对象的类，必须实现CustomCloner接口，该类必须是一个可以new的类，每次克隆时将new出一个类来负责克隆。
+     */
+    Class<?> customCloner() default void.class;
+
+    /**
      * 是否使用redis保存数据，默认关闭。<br>
      * 只有当前是Spring容器且有RedisHelper的bean时，useRedis=true才生效，否则等价于useRedis=false，即便设置为true。<br>
      * 当使用useRedis=true时，cloneReturn选项失效。<br>
+     * 当使用redis保存数据时，数据的失效时长为expireSecond的2倍。
      */
     boolean useRedis() default false;
     
