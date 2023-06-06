@@ -94,7 +94,8 @@ public class RedisLock {
 						namespace, key, lockUuid, value);
 				return false;
 			} else {
-				// 虽然从查询uuid到实际去续期，中间可能发生了锁的变化，但是这个情况出现概率极低，而且出现了也没有明细问题，只是帮另外一个锁续期了一次，后续也不会一直续期
+				// 虽然从查询uuid到实际去续期，中间可能发生了锁的变化，但是这个情况出现概率极低
+				// 而且出现了也没有大的问题，只是帮另外一个锁续期了一次，后续也不会一直续期
 				return redisHelper.setExpire(newKey, maxTransactionSeconds);
 			}
         } catch (Exception e) {

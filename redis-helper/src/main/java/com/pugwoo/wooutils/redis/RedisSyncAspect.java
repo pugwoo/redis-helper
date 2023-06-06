@@ -37,7 +37,7 @@ public class RedisSyncAspect implements InitializingBean {
 
     private static volatile HeartbeatRenewalTask heartbeatRenewalTask = null; // 不需要多线程
 
-    private long startTimestamp = System.currentTimeMillis();
+    private final long startTimestamp = System.currentTimeMillis();
 
     @Override
     public void afterPropertiesSet() {

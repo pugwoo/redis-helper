@@ -84,9 +84,9 @@ public interface RedisHelper {
 	
 	/**
 	 * 设置key的超时时间
-	 * @param key
-	 * @param expireSecond
-	 * @return
+	 * @param key redis的key
+	 * @param expireSecond 超时时间，单位秒
+	 * @return 设置成功返回true，否则返回false
 	 */
 	boolean setExpire(String key, int expireSecond);
 	
