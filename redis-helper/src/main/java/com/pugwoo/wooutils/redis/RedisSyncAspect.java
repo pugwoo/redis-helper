@@ -137,7 +137,7 @@ public class RedisSyncAspect implements InitializingBean {
         if (redisSyncRet.uuid != null) {
             heartBeatKeys.remove(redisSyncRet.uuid);
         }
-        boolean result = redisHelper.releaseLock(p.namespace, p.key, redisSyncRet.lockUuid);
+        boolean result = redisHelper.releaseLock(p.namespace, p.key, redisSyncRet.lockUuid, p.isReentrantLock);
         logReleaseLock(p, redisSyncRet.lockUuid, result);
     }
 
@@ -150,13 +150,13 @@ public class RedisSyncAspect implements InitializingBean {
         for (int i = 1; true; i++) {
 
             long lockStart = System.currentTimeMillis();
-            String lockUuid = redisHelper.requireLock(p.namespace, p.key, tmpExpireSecond);
+            String lockUuid = redisHelper.requireLock(p.namespace, p.key, tmpExpireSecond, p.isReentrantLock);
 
             if (lockUuid != null) {
 
                 // 获取到了锁，到这里之前发生了 GC或者获取锁的时候网络TTL大，导致锁过期了，则进行解锁并等待下一轮获取
                 if (System.currentTimeMillis() - lockStart > tmpExpireSecond * 1000L) {
-                    boolean result = redisHelper.releaseLock(p.namespace, p.key, lockUuid);
+                    boolean result = redisHelper.releaseLock(p.namespace, p.key, lockUuid, p.isReentrantLock);
                     logReleaseLock(p, lockUuid, result);
                     return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i);
                 }
@@ -301,13 +301,14 @@ public class RedisSyncAspect implements InitializingBean {
 
     private RedisSyncParam copyFrom(Synchronized sync) {
         RedisSyncParam redisSyncParam = new RedisSyncParam();
-        redisSyncParam.namespace = (sync.namespace());
-        redisSyncParam.keyScript = (sync.keyScript());
-        redisSyncParam.expireSecond = (sync.expireSecond());
-        redisSyncParam.heartbeatExpireSecond = (sync.heartbeatExpireSecond());
-        redisSyncParam.waitLockMillisecond = (sync.waitLockMillisecond());
-        redisSyncParam.logDebug = (sync.logDebug());
-        redisSyncParam.throwExceptionIfNotGetLock = (sync.throwExceptionIfNotGetLock());
+        redisSyncParam.namespace = sync.namespace();
+        redisSyncParam.keyScript = sync.keyScript();
+        redisSyncParam.expireSecond = sync.expireSecond();
+        redisSyncParam.heartbeatExpireSecond = sync.heartbeatExpireSecond();
+        redisSyncParam.waitLockMillisecond = sync.waitLockMillisecond();
+        redisSyncParam.logDebug = sync.logDebug();
+        redisSyncParam.throwExceptionIfNotGetLock = sync.throwExceptionIfNotGetLock();
+        redisSyncParam.isReentrantLock = sync.isReentrantLock();
         return redisSyncParam;
     }
 
