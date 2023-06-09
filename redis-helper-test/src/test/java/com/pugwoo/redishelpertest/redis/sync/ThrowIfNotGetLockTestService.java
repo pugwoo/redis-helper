@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 public class ThrowIfNotGetLockTestService {
     
     /** 获取不到锁不抛异常 */
-    @Synchronized(namespace = "notThrowIfNotGetLock", expireSecond = 2, waitLockMillisecond = 990)
+    @Synchronized(namespace = "notThrowIfNotGetLock", expireSecond = 2, waitLockMillisecond = 990, throwExceptionIfNotGetLock = false)
     public void notThrowIfNotGetLock(int a, long sleepMs) {
         System.out.println(DateUtils.format(LocalDateTime.now()) + " 线程" + a + "开始执行");
         if (sleepMs > 0) {

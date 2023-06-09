@@ -12,17 +12,16 @@ import java.lang.reflect.Method;
 public class NotGetLockException extends RuntimeException {
     
     /** 执行的目标方法 */
-    private Method targetMethod;
+    private final Method targetMethod;
     
     /** 分布式锁命名空间 {@link Synchronized#namespace()} */
-    private String namespace;
+    private final String namespace;
     
     /** 分布式锁的key，由 {@link Synchronized#keyScript()} 运算成功得出 */
-    private String key;
-    
+    private final String key;
     
     public NotGetLockException(Method targetMethod, String namespace, String key) {
-        super("Fail to require distributed lock, key:" + RedisLock.getKey(namespace, key));
+        super("Fail to require distributed lock, key:" + RedisLock.getKey(namespace, key) + ", targetMethod:" + targetMethod);
         this.targetMethod = targetMethod;
         this.namespace = namespace;
         this.key = key;

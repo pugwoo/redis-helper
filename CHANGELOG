@@ -1,4 +1,7 @@
-v1.2.8 - [add] 支持分布式锁选择是否可重入
+v1.3.0 - [add] 支持分布式锁选择是否可重入
+       - [enhance] 【升级提示】【重要】@Synchronized的throwExceptionIfNotGetLock值默认由false改为true，获取不到锁时将默认抛出异常
+                                      升级时请注意捕获并处理NotGetLockException异常
+
 
 2023年6月6日
 v1.2.7 - [enhance] 设置HiSpeedCacheAspect切面的优先级为1000，RedisSyncAspect优先级为2000，高速缓存的优先级必须高于分布式锁。

@@ -68,10 +68,10 @@ public @interface Synchronized {
 	
 	/**
 	 * 是否在获取不到分布式锁时抛出异常 <br>
-	 * 默认不抛出异常 <br>
+	 * 默认抛出异常 @since 1.3.0 <br>
 	 * 如果设置为true，则当获取不到锁时，抛出 {@link NotGetLockException}
 	 */
-	boolean throwExceptionIfNotGetLock() default false;
+	boolean throwExceptionIfNotGetLock() default true;
 
 	/**
 	 * 是否是可重入锁，默认是可重入锁
