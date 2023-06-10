@@ -48,7 +48,7 @@ public class RedisSyncParam {
     /**
      * @see Synchronized#throwExceptionIfNotGetLock()
      */
-    protected boolean throwExceptionIfNotGetLock = false;
+    protected boolean throwExceptionIfNotGetLock = true;
 
     /**
      * @see Synchronized#isReentrantLock()

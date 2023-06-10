@@ -1,6 +1,8 @@
 v1.3.0 - [add] 支持分布式锁选择是否可重入
        - [enhance] 【升级提示】【重要】@Synchronized的throwExceptionIfNotGetLock值默认由false改为true，获取不到锁时将默认抛出异常
                                       升级时请注意捕获并处理NotGetLockException异常
+       - [enhance] HiSpeedCache的cacheNullValue属性默认由true改成false，默认不缓存null值，原因是认为null值很可能是异常值，不应该缓存
+                   对于没有缓存null值所代理的可能的缓存击穿的问题，请自行判断后开启缓存null值来解决
 
 
 2023年6月6日

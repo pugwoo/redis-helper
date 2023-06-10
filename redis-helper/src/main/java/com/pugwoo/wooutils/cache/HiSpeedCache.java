@@ -67,10 +67,10 @@ public @interface HiSpeedCache {
     boolean useRedis() default false;
     
     /**
-     * 是否缓存null值，默认是true缓存的 <br>
+     * 是否缓存null值，默认是false不缓存 <br>
      * 当此值为false时，方法返回null值，不进行缓存
      */
-    boolean cacheNullValue() default true;
+    boolean cacheNullValue() default false;
     
     /**
      * 当高速缓存使用了redis时，该参数有效 <br>
