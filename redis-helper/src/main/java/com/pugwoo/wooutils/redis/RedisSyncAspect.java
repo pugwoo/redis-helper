@@ -341,6 +341,7 @@ public class RedisSyncAspect implements InitializingBean {
             }
 
             while (true) { // 一直循环，不会退出
+                long start = System.currentTimeMillis();
                 for (String key : heartBeatKeys.keySet()) {
                     HeartBeatInfo heartBeatInfo = heartBeatKeys.get(key);
                     // 相当于double-check
@@ -350,9 +351,21 @@ public class RedisSyncAspect implements InitializingBean {
                                 heartBeatInfo.heartbeatExpireSecond);
                     }
                 }
-                try {
-                    Thread.sleep(3000); // 3秒heart beat一次，这里是fixed delay，已经考虑到3秒对于30秒的默认超时时长，已经足够了
-                } catch (InterruptedException e) { // ignore
+                long cost = System.currentTimeMillis() - start;
+                if (cost > 3000) {
+                    LOGGER.warn("total heartbeat renewal cost:{}ms > 3000ms, please report at github/pugwoo/redis-helper", cost);
+                }
+
+                // 3秒heart beat一次，这里是fixed delay，已经考虑到3秒对于30秒的默认超时时长，已经足够了
+                long sleep = 3000 - cost;
+                if (sleep < 0) {
+                    sleep = 0;
+                }
+                if (sleep > 0) {
+                    try {
+                        Thread.sleep(sleep);
+                    } catch (InterruptedException ignored) {
+                    }
                 }
             }
         }
