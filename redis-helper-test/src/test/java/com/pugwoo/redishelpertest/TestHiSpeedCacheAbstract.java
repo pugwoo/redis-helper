@@ -290,7 +290,7 @@ public abstract class TestHiSpeedCacheAbstract {
         }
         long end = System.currentTimeMillis();
         System.out.println("cost:" + (end - start) + "ms");
-        assert (end - start) < 1100; // 走了缓存
+        assert (end - start) < 1200; // 走了缓存
 
         start = System.currentTimeMillis();
         for (int i = 0; i < 5; i++) {

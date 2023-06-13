@@ -1,10 +1,12 @@
 package com.pugwoo.wooutils.redis.impl;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
+import com.pugwoo.wooutils.utils.InnerCommonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -72,6 +74,17 @@ public class RedisLock {
 					lockCount.get().put(newKey, 1);
 					lockUuidTL.get().put(newKey, uuid);
 				}
+
+				// 写入分布式锁的加锁者信息：ip、threadId
+				List<String> ipv4IPs = InnerCommonUtils.getIpv4IPs();
+				String ip = String.join(";", ipv4IPs);
+				Long threadId = Thread.currentThread().getId();
+				Map<String, Object> info = new HashMap<>();
+				info.put("clientIp", ip);
+				info.put("clientThreadId", threadId);
+				info.put("lockTimestamp", System.currentTimeMillis());
+				redisHelper.setObject(newKey + ":lockInfo", maxTransactionSeconds, info);
+
 				return uuid;
 			} else {
 				return null;
@@ -120,7 +133,11 @@ public class RedisLock {
 			} else {
 				// 虽然从查询uuid到实际去续期，中间可能发生了锁的变化，但是这个情况出现概率极低
 				// 而且出现了也没有大的问题，只是帮另外一个锁续期了一次，后续也不会一直续期
-				return redisHelper.setExpire(newKey, maxTransactionSeconds);
+				boolean result = redisHelper.setExpire(newKey, maxTransactionSeconds);
+				if (result) {
+					redisHelper.setExpire(newKey + ":lockInfo", maxTransactionSeconds);
+				}
+				return result;
 			}
         } catch (Exception e) {
             LOGGER.error("renewalLock error, namespace:{}, key:{}", namespace, key, e);
@@ -173,11 +190,12 @@ public class RedisLock {
 				return true;
 			} else if (value.equals(lockUuid)) {
 				redisHelper.remove(newKey, lockUuid); // 这个是原子操作
+				// 说明，此处不移除lockInfo，原因是它只是一个加锁信息，有过期时间，直接等待过期就可以了，也便于在锁是否的短时间内，根据其信息debug问题
 				if (isReentrantLock) {
 					lockCount.get().remove(newKey);
 					lockUuidTL.get().remove(newKey);
 				}
-				return true;
+				return true; // 就算lock uuid不匹配，也说明这个锁不是属于自己了，返回true表示解锁成功了
 			} else {
 				LOGGER.error("releaseLock namespace:{}, key:{} fail, uuid not match, redis:{}, given:{}",
 						namespace, key, value, lockUuid);
