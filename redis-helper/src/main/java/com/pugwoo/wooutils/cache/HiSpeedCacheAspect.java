@@ -164,8 +164,30 @@ public class HiSpeedCacheAspect implements InitializingBean {
         int cacheRedisDataMillisecond = hiSpeedCache.cacheRedisDataMillisecond();
         boolean cacheRedisData = cacheRedisDataMillisecond > 0;
 
+        boolean cacheNullValue = hiSpeedCache.cacheNullValue();
+
         boolean forceRefresh = HiSpeedCacheContext.getForceRefresh();
-        if (!forceRefresh) { // 非强制刷新，才走缓存逻辑
+        boolean tryForceRefresh = HiSpeedCacheContext.getTryForceRefresh();
+        boolean isTryForceRefreshSuccess = false;
+
+        Object ret = null;
+        if (tryForceRefresh) {
+            try {
+                ret = pjp.proceed();
+                if (ret == null) {
+                    if (cacheNullValue) { // 标记缓存null值，说明null是有意义的，可以认为调用成功
+                        isTryForceRefreshSuccess = true;
+                    }
+                } else {
+                    isTryForceRefreshSuccess = true;
+                }
+            } catch (Throwable e) {
+                LOGGER.error("tryForceRefresh fail, key:{}, args:{}, method:{} HiSpeedCache will use cache.",
+                        cacheKey, JsonRedisObjectConverter.toJson(pjp.getArgs()), targetMethod, e);
+            }
+        }
+
+        if (!forceRefresh && !isTryForceRefreshSuccess) { // 非强制刷新，才走缓存逻辑
             // 查看数据是否有命中，有则直接返回
             if(useRedis) {
                 // 如果设置了缓存redis数据到本地，则尝试获取本地缓存数据
@@ -194,9 +216,10 @@ public class HiSpeedCacheAspect implements InitializingBean {
         }
 
         // 强制刷新或缓存没有命中时，走下面的逻辑
-        Object ret = pjp.proceed();
-        
-        boolean cacheNullValue = hiSpeedCache.cacheNullValue();
+        if (!isTryForceRefreshSuccess) {
+            ret = pjp.proceed();
+        }
+
         boolean continueFetch = hiSpeedCache.continueFetchSecond() > 0;
         
         // 结果为null 不缓存 没有自动刷新缓存 则直接返回

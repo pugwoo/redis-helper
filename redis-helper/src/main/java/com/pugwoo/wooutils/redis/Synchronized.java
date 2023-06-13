@@ -8,12 +8,10 @@ import java.lang.annotation.Target;
 
 /**
  * 分布式锁，注解在方法上。 暂时不支持还按照方法的参数来独立限制。
- * 
+ * <br>
  * 关于返回值：如果方法是常规返回值，当没有获取到锁时，且超过了阻塞等待时间，则返回null。
  * 如果想拿到更多的信息，可以通过RedisSyncContext拿，线程独立。
- *
- * 【关于锁的可重入性】@Synchronized本身是不支持锁的可重入性，原因见RedisLock类说明。但是由于AOP的特性，自身方法的递归是不涉及到AOP的，也即天然满足了锁可重入特性，所以@Synchronized是支持自身方法递归的。但是对于类之间的循环调用，则应避免。
- *
+ * <br>
  * @author nick markfly
  */
 @Target({ElementType.METHOD})
@@ -40,7 +38,7 @@ public @interface Synchronized {
 	/**
 	 * 锁超时的秒数，如果使用者超过这个时间还没有主动释放锁，那么redis会自动释放掉该锁。
 	 * 请使用者合理评估任务执行时间，推荐按正常执行时间的10倍~100倍评估该时间。
-     *
+     * <br>
      * 当expireSecond大于0时有效，如果指定了expireSecond，则heartbeatSecond失效。
 	 * @return bool
 	 */
@@ -70,8 +68,13 @@ public @interface Synchronized {
 	
 	/**
 	 * 是否在获取不到分布式锁时抛出异常 <br>
-	 * 默认不抛出异常 <br>
+	 * 默认抛出异常 @since 1.3.0 <br>
 	 * 如果设置为true，则当获取不到锁时，抛出 {@link NotGetLockException}
 	 */
-	boolean throwExceptionIfNotGetLock() default false;
+	boolean throwExceptionIfNotGetLock() default true;
+
+	/**
+	 * 是否是可重入锁，默认是可重入锁
+	 */
+	boolean isReentrantLock() default true;
 }

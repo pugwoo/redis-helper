@@ -1,8 +1,9 @@
 package com.pugwoo.wooutils.redis;
 
 
-import java.lang.reflect.Method;
 import org.aspectj.lang.ProceedingJoinPoint;
+
+import java.lang.reflect.Method;
 
 /**
  * @author firefly
@@ -42,12 +43,17 @@ public class RedisSyncParam {
     /**
      * @see Synchronized#logDebug()
      */
-    protected  boolean logDebug = false;
+    protected boolean logDebug = false;
 
     /**
      * @see Synchronized#throwExceptionIfNotGetLock()
      */
-    protected  boolean throwExceptionIfNotGetLock = false;
+    protected boolean throwExceptionIfNotGetLock = true;
+
+    /**
+     * @see Synchronized#isReentrantLock()
+     */
+    protected boolean isReentrantLock = true;
 
     // #########################
 
@@ -70,7 +76,5 @@ public class RedisSyncParam {
      * spring 提供的 ProceedingJoinPoint
      */
     protected ProceedingJoinPoint pjp;
-
-
 
 }

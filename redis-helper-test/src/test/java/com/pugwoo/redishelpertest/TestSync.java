@@ -232,7 +232,7 @@ public class TestSync {
 		assert haveNotRunCount.get() == 0;  // 其他都失败了 异常了
 		assert haveNotRunExceptionCount.get() == 2; // 2个失败了 抛异常了
 		assert haveNotRunNotThrowIfNotGetLockExceptionCount.get() ==  2;  // 都抛出了NotGetLockException
-		assert cost >= 1000;
-		assert cost <= 2000;
+		System.out.println("cost: " + cost);
+		assert cost >= 1000 && cost <= 2000;
 	}
 }

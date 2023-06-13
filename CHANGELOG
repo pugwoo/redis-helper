@@ -1,3 +1,12 @@
+2023年6月13日
+v1.3.0 - [add] 支持分布式锁选择是否可重入
+       - [enhance] 【升级提示】【重要】@Synchronized的throwExceptionIfNotGetLock值默认由false改为true，获取不到锁时将默认抛出异常
+                                      升级时请注意捕获并处理NotGetLockException异常
+       - [enhance] HiSpeedCache的cacheNullValue属性默认由true改成false，默认不缓存null值，原因是认为null值很可能是异常值，不应该缓存
+                   对于没有缓存null值所代理的可能的缓存击穿的问题，请自行判断后开启缓存null值来解决
+       - [add] 将分布式的加锁者信息放到redis中，方便查看当前锁的持有者
+       - [add] 增加通过HiSpeedContext控制尝试进行强制刷新，但如果失败了就走缓存
+
 2023年6月6日
 v1.2.7 - [enhance] 设置HiSpeedCacheAspect切面的优先级为1000，RedisSyncAspect优先级为2000，高速缓存的优先级必须高于分布式锁。
                    原因：1) 走缓存时不需要对目标方法加分布式锁；2) 高速缓存刷新时需要加分布式锁；

@@ -263,9 +263,10 @@ public interface RedisHelper {
 	 * @param namespace 命名空间，每个应用独立的空间
 	 * @param key 业务key，redis将保证同一个namespace同一个key只有一个client可以拿到锁
 	 * @param maxTransactionSeconds 单位秒，必须大于0,拿到锁之后,预计多久可以完成这个事务，如果超过这个时间还没有归还锁，那么事务将失败
+	 * @param isReentrantLock 是否是可重入锁
 	 * @return 如果加锁成功，返回锁的唯一识别字符，可用于解锁；如果加锁失败，则返回null
 	 */
-	String requireLock(String namespace, String key, int maxTransactionSeconds);
+	String requireLock(String namespace, String key, int maxTransactionSeconds, boolean isReentrantLock);
 
 	/**
 	 * 续期锁的有效期
@@ -280,10 +281,13 @@ public interface RedisHelper {
 
 	/**
 	 * 如果事务已经完成，则归还锁。
-	 * @param namespace
-	 * @param key
+	 * @param namespace 命名空间，每个应用独立的空间
+	 * @param key 业务key，redis将保证同一个namespace同一个key只有一个client可以拿到锁
+	 * @param lockUuid 锁的uuid
+	 * @param isReentrantLock 是否是可重入锁
+	 * @return 释放锁成功时返回true，失败时返回false
 	 */
-	boolean releaseLock(String namespace, String key, String lockUuid);
+	boolean releaseLock(String namespace, String key, String lockUuid, boolean isReentrantLock);
 	
 	/////////////////// Redis Auto Increment ID 分布式自增id //////////////////////
 	
