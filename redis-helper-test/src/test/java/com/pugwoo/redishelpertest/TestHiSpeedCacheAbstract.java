@@ -1,6 +1,7 @@
 package com.pugwoo.redishelpertest;
 
 import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
+import com.pugwoo.wooutils.cache.HiSpeedCacheContext;
 import com.pugwoo.wooutils.json.JSON;
 import org.junit.jupiter.api.Test;
 
@@ -299,6 +300,60 @@ public abstract class TestHiSpeedCacheAbstract {
         end = System.currentTimeMillis();
         System.out.println("cost:" + (end - start) + "ms");
         assert (end - start) > 5000; // 没走缓存
+    }
+
+    @Test
+    public void testHiSpeedContext() throws Exception {
+        // 先调用一下，触发缓存
+        getWithCacheDemoService().getSomethingWithException(false);
+
+        // 调用1次，走缓存
+        long start = System.currentTimeMillis();
+        getWithCacheDemoService().getSomethingWithException(false);
+        long end = System.currentTimeMillis();
+        assert (end - start) < 100;
+
+        // 禁用缓存，此时不走缓存
+        start = System.currentTimeMillis();
+        HiSpeedCacheContext.disableOnce();
+        getWithCacheDemoService().getSomethingWithException(false);
+        end = System.currentTimeMillis();
+        assert (end - start) >= 3000;
+
+        // 再次调用，走缓存
+        start = System.currentTimeMillis();
+        getWithCacheDemoService().getSomethingWithException(false);
+        end = System.currentTimeMillis();
+        assert (end - start) < 100;
+
+        // 强制刷新
+        start = System.currentTimeMillis();
+        HiSpeedCacheContext.forceRefreshOnce();
+        getWithCacheDemoService().getSomethingWithException(false);
+        end = System.currentTimeMillis();
+        assert (end - start) >= 3000;
+
+        // 再次调用，走缓存
+        start = System.currentTimeMillis();
+        getWithCacheDemoService().getSomethingWithException(false);
+        end = System.currentTimeMillis();
+        assert (end - start) < 100;
+
+        // 尝试强制刷新，成功的情况
+        start = System.currentTimeMillis();
+        HiSpeedCacheContext.tryForceRefreshOnce();
+        getWithCacheDemoService().getSomethingWithException(false);
+        end = System.currentTimeMillis();
+        assert (end - start) >= 3000;
+
+        // 尝试强制刷新，失败的情况
+        start = System.currentTimeMillis();
+        HiSpeedCacheContext.tryForceRefreshOnce();
+        String result = getWithCacheDemoService().getSomethingWithException(true); // 故意抛异常
+        end = System.currentTimeMillis();
+        assert (end - start) < 100; // 此时能走缓存
+        assert "ok".equals(result); // 结果也正确
+        System.out.println("cost:" + (end - start) + "ms");
     }
 
 }

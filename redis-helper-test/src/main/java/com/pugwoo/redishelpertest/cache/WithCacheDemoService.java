@@ -129,4 +129,14 @@ public class WithCacheDemoService {
         return "hello";
     }
 
+    // 一个可以控制抛出异常的方法
+    @HiSpeedCache(continueFetchSecond = 30)
+    public String getSomethingWithException(boolean isThrow) throws Exception {
+        if (isThrow) {
+            throw new Exception("getSomethingWithException");
+        }
+        Thread.sleep(3000); // 睡眠放在抛异常后面，配合测试
+        return "ok";
+    }
+
 }
