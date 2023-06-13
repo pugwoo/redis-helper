@@ -5,7 +5,7 @@ useful redis features
 <dependency>
 	<groupId>com.pugwoo</groupId>
 	<artifactId>redis-helper</artifactId>
-	<version>1.2.7</version>
+	<version>1.3.0</version>
 </dependency>
 ```
 
