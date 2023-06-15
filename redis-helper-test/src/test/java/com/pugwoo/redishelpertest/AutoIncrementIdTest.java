@@ -31,7 +31,7 @@ public class AutoIncrementIdTest {
 				@Override
 				public void run() {
 					for(int i = 0; i < TIMES; i++) {
-						Long id = redisHelper.getAutoIncrementId(namespace);
+						Long id = redisHelper.getAutoIncrementId(namespace, 120);
 						//       System.out.println(id);
 						if (id != null) { // null可能是网络原因导致的，不加入
 							ids.add(id);
@@ -65,7 +65,8 @@ public class AutoIncrementIdTest {
 		System.out.println(ids.size());
 
 		assert !isDup;
-		assert ids.size() >= THREAD * TIMES - 30; // 最多允许30个失败
+		assert ids.size() == THREAD * TIMES;
+		System.out.println("total size:" + ids.size());
 
 	}
 
