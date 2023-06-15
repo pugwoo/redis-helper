@@ -181,6 +181,8 @@ public class TestRedisHelper {
 		assert objs.size() == 2;
 		assert objs.get(0).equals("OK");
 		assert objs.get(1).equals("world");
+
+		redisHelper.remove("hello");
 	}
 	
 	@Test
@@ -194,6 +196,8 @@ public class TestRedisHelper {
 		assert objs.size() == 2;
 		assert objs.get(0).equals("OK");
 		assert objs.get(1).equals("hello");
+
+		redisHelper.remove(key);
 	}
 
 }
