@@ -155,6 +155,23 @@ public class TestRedisAckQueue {
         assert redisHelper.ack(randomTopic, receive.getUuid());
         status = redisHelper.getQueueStatus(randomTopic);
         assert status.getPendingCount() == 2;
+
+        // 接收剩下的2个消息
+        RedisMsg msg1 = redisHelper.receive(randomTopic);
+        RedisMsg msg2 = redisHelper.receive(randomTopic);
+
+        status = redisHelper.getQueueStatus(randomTopic);
+        assert status.getPendingCount() == 0;
+        assert status.getDoingCount() == 2;
+
+        // ack剩下的2个消息
+        redisHelper.ack(randomTopic, msg1.getUuid());
+        redisHelper.ack(randomTopic, msg2.getUuid());
+
+        status = redisHelper.getQueueStatus(randomTopic);
+        assert status.getPendingCount() == 0;
+        assert status.getDoingCount() == 0;
+
     }
 
 }
