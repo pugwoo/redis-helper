@@ -59,11 +59,13 @@ public class RedisSyncAspect implements InitializingBean {
      */
     @Around("@annotation(com.pugwoo.wooutils.redis.Synchronizeds) execution(* *.*(..))")
     public Object arounds(ProceedingJoinPoint pjp) throws Throwable {
+        RedisSyncContext.set(false, false); // init初始化
         return processAround(pjp, true);
     }
 
     @Around("@annotation(com.pugwoo.wooutils.redis.Synchronized) execution(* *.*(..))")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        RedisSyncContext.set(false, false); // init初始化
         return processAround(pjp, false);
     }
 
