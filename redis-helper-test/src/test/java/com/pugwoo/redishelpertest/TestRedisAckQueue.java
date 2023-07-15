@@ -57,6 +57,28 @@ public class TestRedisAckQueue {
         // System.out.println("revc msg ack uuid:" + msg.getUuid() + ",content:" + msg.getMsg());
         assert redisHelper.ack(randomTopic, msg.getUuid());
     }
+
+    @Test
+    public void testTimeout() {
+        String randomTopic = "mytopic-" + UUID.randomUUID().toString();
+        String body = "msgconent" + UUID.randomUUID().toString();
+
+        String uuid = redisHelper.send(randomTopic, body, 10);
+
+        // 先消费一个，但是不ack也不nack
+        RedisMsg msg = redisHelper.receive(randomTopic); // 阻塞
+        assert msg != null;
+        assert msg.getMsg().equals(body);
+
+        // 再次消费，应该可以消费到上面那个没有ack的消息
+        long t1 = System.currentTimeMillis();
+        msg = redisHelper.receive(randomTopic); // 阻塞
+        long t2 = System.currentTimeMillis();
+        assert msg != null;
+        assert msg.getMsg().equals(body);
+
+        assert t2 - t1 >= 10000 && t2 - t1 <= 11000;
+    }
     
     @Test
     public void testSendBatch() {
