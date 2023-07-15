@@ -77,6 +77,7 @@ public class TestRedisAckQueue {
         assert msg != null;
         assert msg.getMsg().equals(body);
 
+        System.out.println("cost:" + (t2 - t1) + "ms");
         assert t2 - t1 >= 10000 && t2 - t1 <= 11000;
     }
     
