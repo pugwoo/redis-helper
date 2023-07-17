@@ -117,7 +117,7 @@ public class RedisLimit {
 		return useLimitCount(redisHelper, limitEnum, key, 1);
 	}
 	
-	private static String getKey(RedisLimitParam limitParam, String key) {
+	public static String getKey(RedisLimitParam limitParam, String key) {
 		String time = null;
 		Date now = new Date();
 		if(limitParam.getLimitPeroid() == RedisLimitPeroidEnum.SECOND) {

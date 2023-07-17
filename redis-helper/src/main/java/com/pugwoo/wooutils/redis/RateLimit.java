@@ -1,5 +1,7 @@
 package com.pugwoo.wooutils.redis;
 
+import com.pugwoo.wooutils.redis.exception.ExceedRateLimitException;
+
 import java.lang.annotation.*;
 
 /**
@@ -35,5 +37,20 @@ public @interface RateLimit {
      * [必须] 单位周期内的调用次数上限
      */
     int limitCount();
+
+    /**
+     * 当进程/线程没有拿到调用资格时，阻塞等待的时间，单位毫秒，默认10000毫秒
+     * （取10秒这个值考虑的是人类等待计算机反馈的不耐烦的大概时间）。
+     * 如果不需要阻塞，请设置为0.
+     * @return bool
+     */
+    int waitMillisecond() default 10000;
+
+    /**
+     * 是否在获取不到调用资格时抛出异常 <br>
+     * 默认抛出异常 <br>
+     * 如果设置为true，则当获取不到资格时，抛出 {@link ExceedRateLimitException}
+     */
+    boolean throwExceptionIfNotGetLock() default true;
 
 }
