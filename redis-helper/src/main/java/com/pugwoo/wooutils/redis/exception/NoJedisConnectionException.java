@@ -1,4 +1,4 @@
-package com.pugwoo.wooutils.redis;
+package com.pugwoo.wooutils.redis.exception;
 
 public class NoJedisConnectionException extends RuntimeException {
 

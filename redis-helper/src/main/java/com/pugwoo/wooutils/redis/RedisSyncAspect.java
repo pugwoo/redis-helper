@@ -1,5 +1,6 @@
 package com.pugwoo.wooutils.redis;
 
+import com.pugwoo.wooutils.redis.exception.NotGetLockException;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import com.pugwoo.wooutils.utils.ClassUtils;
 import org.aspectj.lang.ProceedingJoinPoint;

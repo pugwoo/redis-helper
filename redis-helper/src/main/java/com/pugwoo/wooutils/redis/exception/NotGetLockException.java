@@ -1,5 +1,6 @@
-package com.pugwoo.wooutils.redis;
+package com.pugwoo.wooutils.redis.exception;
 
+import com.pugwoo.wooutils.redis.Synchronized;
 import com.pugwoo.wooutils.redis.impl.RedisLock;
 
 import java.lang.reflect.Method;

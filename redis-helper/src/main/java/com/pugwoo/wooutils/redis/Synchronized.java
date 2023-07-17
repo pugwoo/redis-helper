@@ -1,5 +1,7 @@
 package com.pugwoo.wooutils.redis;
 
+import com.pugwoo.wooutils.redis.exception.NotGetLockException;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Repeatable;
 import java.lang.annotation.Retention;
