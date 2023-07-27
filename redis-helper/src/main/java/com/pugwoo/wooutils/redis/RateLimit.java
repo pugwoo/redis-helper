@@ -51,6 +51,6 @@ public @interface RateLimit {
      * 默认抛出异常 <br>
      * 如果设置为true，则当获取不到资格时，抛出 {@link ExceedRateLimitException}
      */
-    boolean throwExceptionIfNotGetLock() default true;
+    boolean throwExceptionIfExceedRateLimit() default true;
 
 }

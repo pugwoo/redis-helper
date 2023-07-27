@@ -201,9 +201,15 @@ public class RedisSyncAspect implements InitializingBean {
                 return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i);
             }
             if (p.waitLockMillisecond - totalWait < b) {
-                Thread.sleep(p.waitLockMillisecond - totalWait);
+                try {
+                    Thread.sleep(p.waitLockMillisecond - totalWait);
+                } catch (InterruptedException ignored) {
+                }
             } else {
-                Thread.sleep(b);
+                try {
+                    Thread.sleep(b);
+                } catch (InterruptedException ignored) {
+                }
                 int c = a + b; // 构造兔子数列
                 a = b;
                 b = c;

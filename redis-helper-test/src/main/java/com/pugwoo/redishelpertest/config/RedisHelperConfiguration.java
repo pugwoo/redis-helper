@@ -2,6 +2,7 @@ package com.pugwoo.redishelpertest.config;
 
 import com.pugwoo.wooutils.cache.HiSpeedCacheAspect;
 import com.pugwoo.wooutils.redis.RedisHelper;
+import com.pugwoo.wooutils.redis.RedisLimitAspect;
 import com.pugwoo.wooutils.redis.RedisSyncAspect;
 import com.pugwoo.wooutils.redis.impl.RedisHelperImpl;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,11 @@ public class RedisHelperConfiguration {
     @Bean
     public RedisSyncAspect redisSyncAspect() {
         return new RedisSyncAspect();
+    }
+
+    @Bean
+    public RedisLimitAspect redisLimitAspect() {
+        return new RedisLimitAspect();
     }
 
     @Bean
