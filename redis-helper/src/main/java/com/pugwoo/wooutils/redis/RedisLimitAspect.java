@@ -2,6 +2,7 @@ package com.pugwoo.wooutils.redis;
 
 import com.pugwoo.wooutils.redis.exception.ExceedRateLimitException;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
+import com.pugwoo.wooutils.utils.ClassUtils;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -93,7 +94,13 @@ public class RedisLimitAspect {
     private boolean requireLock(RateLimit rateLimit, String key, boolean throwExceptionIfExceedRateLimit,
                                 Method targetMethod) {
         RedisLimitParam limitParam = new RedisLimitParam();
-        limitParam.setNamespace(rateLimit.namespace());
+
+        String namespace = rateLimit.namespace();
+        if (namespace.trim().isEmpty()) {
+            namespace = generateNamespace(targetMethod);
+        }
+
+        limitParam.setNamespace(namespace);
         limitParam.setLimitCount(rateLimit.limitCount());
         limitParam.setLimitPeroid(rateLimit.limitPeriod());
         boolean result = redisHelper.useLimitCount(limitParam, key, 1) > 0; // 默认每次调用算1次，这里暂不需要作为配置
@@ -138,6 +145,10 @@ public class RedisLimitAspect {
             throw new ExceedRateLimitException(targetMethod, key, limitParam);
         }
         return result;
+    }
+
+    private String generateNamespace(Method method) {
+        return ClassUtils.getMethodSignatureWithClassName(method);
     }
 
 }
