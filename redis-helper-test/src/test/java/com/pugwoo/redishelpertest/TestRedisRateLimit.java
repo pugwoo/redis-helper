@@ -70,9 +70,12 @@ public class TestRedisRateLimit {
         // 不是开始和结束的时间段，应该是20000个
         List<Map<String, Object>> list = ListUtils.transform(timeCount.entrySet(), o -> MapUtils.of("key", o.getKey(), "value", o.getValue()));
         ListUtils.sortAscNullLast(list, o -> (String) o.get("key"));
+        boolean atLeastCheckOne = false;
         for (int i = 1; i < list.size() - 1; i++) {
             assert list.get(i).get("value").toString().equals(String.valueOf(20000L));
+            atLeastCheckOne = true;
         }
+        assert atLeastCheckOne;
     }
 
 }
