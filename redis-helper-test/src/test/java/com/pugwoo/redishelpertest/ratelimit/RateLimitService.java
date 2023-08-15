@@ -12,4 +12,11 @@ public class RateLimitService {
         return name;
     }
 
+    // qps峰值大概是800多，所以这里用500才能起到限制效果
+    @RateLimit(limitPeriod = RedisLimitPeroidEnum.TEN_SECOND, limitCount = 400, waitMillisecond = 0)
+    @RateLimit(limitPeriod = RedisLimitPeroidEnum.MINUTE, limitCount = 1000, waitMillisecond = 0)
+    public String limitPerMinute2(String name) {
+        return name;
+    }
+
 }
