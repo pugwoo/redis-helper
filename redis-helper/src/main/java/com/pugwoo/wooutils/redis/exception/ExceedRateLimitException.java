@@ -8,7 +8,7 @@ import java.lang.reflect.Method;
 
 /**
  * @author sapluk <br>
- * 如果获取不到调用资格，且 {@link RateLimit#throwExceptionIfNotGetLock()} 设置为true
+ * 如果获取不到调用资格，且 {@link RateLimit#throwExceptionIfExceedRateLimit()} 设置为true
  * 则抛出该异常
  */
 public class ExceedRateLimitException extends RuntimeException {
