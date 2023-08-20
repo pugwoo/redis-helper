@@ -24,7 +24,7 @@ public class RedisLimitTest {
 		// 一个redisLimitParam 相当于是一个业务配置，例如每分钟只能请求1000次
 		final RedisLimitParam redisLimitParam = new RedisLimitParam();
 		redisLimitParam.setNamespace("VIEW-LIMIT" + UUID.randomUUID().toString()); // 每个业务单独设置，每个业务不同
-		redisLimitParam.setLimitPeroid(RedisLimitPeroidEnum.MONTH);
+		redisLimitParam.setLimitPeroid(RedisLimitPeroidEnum.HOUR);
 		redisLimitParam.setLimitCount(LIMIT);
 
 		final Set<Long> vector = new ConcurrentSkipListSet<>();

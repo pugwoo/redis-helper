@@ -1,3 +1,8 @@
+2023年8月19日
+v1.3.1 - [add] 支持以注解@RateLimit的方式使用限频器
+       - [enhance] 优化getAutoIncrementId方法的性能
+       - [modify] 【升级提示】NoJedisConnectionException和NotGetLockException移动到exception包下
+
 2023年6月13日
 v1.3.0 - [add] 支持分布式锁选择是否可重入
        - [enhance] 【升级提示】【重要】@Synchronized的throwExceptionIfNotGetLock值默认由false改为true，获取不到锁时将默认抛出异常

@@ -3,7 +3,7 @@ package com.pugwoo.redishelpertest;
 import com.pugwoo.redishelpertest.redis.sync.HeartbeatTestService;
 import com.pugwoo.redishelpertest.redis.sync.HelloService;
 import com.pugwoo.redishelpertest.redis.sync.ThrowIfNotGetLockTestService;
-import com.pugwoo.wooutils.redis.NotGetLockException;
+import com.pugwoo.wooutils.redis.exception.NotGetLockException;
 import com.pugwoo.wooutils.redis.RedisSyncContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

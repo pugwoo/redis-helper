@@ -2,6 +2,7 @@ package com.pugwoo.wooutils.redis.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.pugwoo.wooutils.redis.*;
+import com.pugwoo.wooutils.redis.exception.NoJedisConnectionException;
 import org.mvel2.MVEL;
 import org.mvel2.compiler.ExecutableAccessor;
 import org.slf4j.Logger;

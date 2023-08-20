@@ -23,15 +23,15 @@ public class TestRedisAckQueue {
         String body = "msgconent" + UUID.randomUUID().toString();
 
         String uuid = redisHelper.send(randomTopic, body);
-        // System.out.println("send msg:" + uuid);
+        System.out.println("send msg:" + uuid);
         assert uuid != null && !uuid.isEmpty();
 
         RedisMsg msg = redisHelper.receive(randomTopic); // 阻塞
         assert msg != null;
         assert msg.getMsg().equals(body);
 
-        // System.out.println("revc msg ack uuid:" + msg.getUuid() + ",content:" + msg.getMsg());
-        assert redisHelper.ack("mytopic2", msg.getUuid());
+        assert redisHelper.ack(randomTopic, msg.getUuid());
+        System.out.println("revc msg ack uuid:" + msg.getUuid() + ",content:" + msg.getMsg());
     }
 
     @Test
@@ -47,7 +47,7 @@ public class TestRedisAckQueue {
         assert msg != null;
         assert msg.getMsg().equals(body);
 
-        assert redisHelper.nack("mytopic2", msg.getUuid());
+        assert redisHelper.nack(randomTopic, msg.getUuid());
 
         // 再次等待接收
         msg = redisHelper.receive(randomTopic); // 阻塞
@@ -55,7 +55,30 @@ public class TestRedisAckQueue {
         assert msg.getMsg().equals(body);
 
         // System.out.println("revc msg ack uuid:" + msg.getUuid() + ",content:" + msg.getMsg());
-        assert redisHelper.ack("mytopic2", msg.getUuid());
+        assert redisHelper.ack(randomTopic, msg.getUuid());
+    }
+
+    @Test
+    public void testTimeout() {
+        String randomTopic = "mytopic-" + UUID.randomUUID().toString();
+        String body = "msgconent" + UUID.randomUUID().toString();
+
+        String uuid = redisHelper.send(randomTopic, body, 10);
+
+        // 先消费一个，但是不ack也不nack
+        RedisMsg msg = redisHelper.receive(randomTopic); // 阻塞
+        assert msg != null;
+        assert msg.getMsg().equals(body);
+
+        // 再次消费，应该可以消费到上面那个没有ack的消息
+        long t1 = System.currentTimeMillis();
+        msg = redisHelper.receive(randomTopic); // 阻塞
+        long t2 = System.currentTimeMillis();
+        assert msg != null;
+        assert msg.getMsg().equals(body);
+
+        System.out.println("cost:" + (t2 - t1) + "ms");
+        assert t2 - t1 >= 10000 && t2 - t1 <= 11000;
     }
     
     @Test
@@ -69,7 +92,28 @@ public class TestRedisAckQueue {
 
         List<String> uuidList4 = redisHelper.sendBatch(randomTopic, msgList4);
         assert uuidList4.size() == 3;
-    
+
+        // 接收消息
+        RedisMsg msg = redisHelper.receive(randomTopic);
+        assert msg != null;
+        assert uuidList4.contains(msg.getUuid());
+        redisHelper.ack(randomTopic, msg.getUuid());
+        uuidList4.remove(msg.getUuid());
+
+        msg = redisHelper.receive(randomTopic);
+        assert msg != null;
+        assert uuidList4.contains(msg.getUuid());
+        redisHelper.ack(randomTopic, msg.getUuid());
+        uuidList4.remove(msg.getUuid());
+
+        msg = redisHelper.receive(randomTopic);
+        assert msg != null;
+        assert uuidList4.contains(msg.getUuid());
+        redisHelper.ack(randomTopic, msg.getUuid());
+        uuidList4.remove(msg.getUuid());
+
+        assert uuidList4.size() == 0;
+
         List<String> msgList5 = new ArrayList<>();
         msgList5.add("msgconent" + UUID.randomUUID().toString());
         msgList5.add("msgconent" + UUID.randomUUID().toString());
@@ -80,6 +124,26 @@ public class TestRedisAckQueue {
         List<String> uuidList5 = redisHelper.sendBatch(randomTopic, msgList5, 60);
         assert uuidList5.size() == 3;
 
+        // 接收消息
+        msg = redisHelper.receive(randomTopic);
+        assert msg != null;
+        assert uuidList5.contains(msg.getUuid());
+        redisHelper.ack(randomTopic, msg.getUuid());
+        uuidList5.remove(msg.getUuid());
+
+        msg = redisHelper.receive(randomTopic);
+        assert msg != null;
+        assert uuidList5.contains(msg.getUuid());
+        redisHelper.ack(randomTopic, msg.getUuid());
+        uuidList5.remove(msg.getUuid());
+
+        msg = redisHelper.receive(randomTopic);
+        assert msg != null;
+        assert uuidList5.contains(msg.getUuid());
+        redisHelper.ack(randomTopic, msg.getUuid());
+        uuidList5.remove(msg.getUuid());
+
+        assert uuidList5.size() == 0;
     }
 
     @Test
@@ -114,6 +178,23 @@ public class TestRedisAckQueue {
         assert redisHelper.ack(randomTopic, receive.getUuid());
         status = redisHelper.getQueueStatus(randomTopic);
         assert status.getPendingCount() == 2;
+
+        // 接收剩下的2个消息
+        RedisMsg msg1 = redisHelper.receive(randomTopic);
+        RedisMsg msg2 = redisHelper.receive(randomTopic);
+
+        status = redisHelper.getQueueStatus(randomTopic);
+        assert status.getPendingCount() == 0;
+        assert status.getDoingCount() == 2;
+
+        // ack剩下的2个消息
+        redisHelper.ack(randomTopic, msg1.getUuid());
+        redisHelper.ack(randomTopic, msg2.getUuid());
+
+        status = redisHelper.getQueueStatus(randomTopic);
+        assert status.getPendingCount() == 0;
+        assert status.getDoingCount() == 0;
+
     }
 
 }

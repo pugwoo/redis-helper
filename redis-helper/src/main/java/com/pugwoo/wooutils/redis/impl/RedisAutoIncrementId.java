@@ -9,6 +9,8 @@ public class RedisAutoIncrementId {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedisAutoIncrementId.class);
 
+	private static final String INCR_AND_EXPIRE_SCRIPT = "local value = redis.call('INCR', KEYS[1]); redis.call('EXPIRE', KEYS[1], ARGV[1]); return value";
+
 	public static Long getAutoIncrementId(RedisHelper redisHelper, String namespace) {
 		return getAutoIncrementId(redisHelper, namespace, 0);
 	}
@@ -24,18 +26,20 @@ public class RedisAutoIncrementId {
 		return redisHelper.execute(jedis -> {
 			try {
 				String key = namespace + "_ID";
-				Long id = jedis.incr(key);
-				if (expireSeconds > 0) {
-					// 这里可以拆分2条命令的原因是一般自增ID不会只调一次，因此一次的失败并不会引起问题。
-					// 最差的情况下，就是这个自增ID key永久存在，也不会有逻辑上的错误。
-					jedis.expire(key, (long) expireSeconds);
+				if (expireSeconds <= 0) {
+					return jedis.incr(key);
+				} else {
+					Object eval = jedis.eval(INCR_AND_EXPIRE_SCRIPT, 1, key, String.valueOf(expireSeconds));
+					if (eval == null) {
+						return null;
+					} else {
+						return eval instanceof Long ? (Long) eval : Long.valueOf(eval.toString());
+					}
 				}
-				return id;
 			} catch (Exception e) {
 				LOGGER.error("getAutoIncrementId jedis incr error, namespace:{}", namespace, e);
 				return null;
 			}
 		});
 	}
-	
 }

@@ -1,5 +1,6 @@
 package com.pugwoo.wooutils.redis;
 
+import com.pugwoo.wooutils.redis.exception.NotGetLockException;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import com.pugwoo.wooutils.utils.ClassUtils;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -59,11 +60,13 @@ public class RedisSyncAspect implements InitializingBean {
      */
     @Around("@annotation(com.pugwoo.wooutils.redis.Synchronizeds) execution(* *.*(..))")
     public Object arounds(ProceedingJoinPoint pjp) throws Throwable {
+        RedisSyncContext.set(false, false); // init初始化
         return processAround(pjp, true);
     }
 
     @Around("@annotation(com.pugwoo.wooutils.redis.Synchronized) execution(* *.*(..))")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        RedisSyncContext.set(false, false); // init初始化
         return processAround(pjp, false);
     }
 
@@ -198,9 +201,15 @@ public class RedisSyncAspect implements InitializingBean {
                 return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i);
             }
             if (p.waitLockMillisecond - totalWait < b) {
-                Thread.sleep(p.waitLockMillisecond - totalWait);
+                try {
+                    Thread.sleep(p.waitLockMillisecond - totalWait);
+                } catch (InterruptedException ignored) {
+                }
             } else {
-                Thread.sleep(b);
+                try {
+                    Thread.sleep(b);
+                } catch (InterruptedException ignored) {
+                }
                 int c = a + b; // 构造兔子数列
                 a = b;
                 b = c;
