@@ -2,7 +2,7 @@ package com.pugwoo.redishelperbenchmark;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.RedisLimitParam;
-import com.pugwoo.wooutils.redis.RedisLimitPeroidEnum;
+import com.pugwoo.wooutils.redis.RedisLimitPeriodEnum;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,7 +34,7 @@ public class RedisLimitBenchmark {
 		// 一个redisLimitParam 相当于是一个业务配置，例如每分钟只能请求1000次
 		final RedisLimitParam redisLimitParam = new RedisLimitParam();
 		redisLimitParam.setNamespace("VISIT-LIMIT"); // 每个业务单独设置，每个业务不同
-		redisLimitParam.setLimitPeroid(RedisLimitPeroidEnum.DAY); // 设置长一点，方便benchmark
+		redisLimitParam.setLimitPeriod(RedisLimitPeriodEnum.DAY); // 设置长一点，方便benchmark
 		redisLimitParam.setLimitCount(100000000); // 设置足够大，抢不完
 
 		int concurrents = 100; // 并发数
