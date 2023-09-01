@@ -78,7 +78,7 @@ public class TestRedisAckQueue {
         assert msg.getMsg().equals(body);
 
         System.out.println("cost:" + (t2 - t1) + "ms");
-        assert t2 - t1 >= 10000 && t2 - t1 <= 11000;
+        assert t2 - t1 >= 10000 && t2 - t1 <= 31000; // 特别说明：因为清理seq的线程有分布式锁，过期30秒，所以如果上一个锁还没释放且程序挂了，最长会等待30秒
     }
     
     @Test
