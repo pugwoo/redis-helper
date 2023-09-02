@@ -62,6 +62,11 @@ public class RedisLock {
 			String uuid = lockUuidTL.get().get(newKey);
 			if (lc != null && lc >= 1 && uuid != null && !uuid.isEmpty()) {
 				lockCount.get().put(newKey, lc + 1);
+				/*
+			     * 特别说明：可重入锁获得的锁不续期，理由：
+			     * 1) 一般可重入锁和第一次获得锁的动作在同一个代码业务内，时间较短，且锁续期需要额外的成本，故不进行
+			     * 2) 如果同一个代码业务内需要续期，可以调用renewalLock续期
+				 */
 				return uuid;
 			}
 		}
