@@ -7,7 +7,6 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -55,14 +54,6 @@ public class InnerCommonUtils {
 
     public static boolean isNotBlank(String str) {
         return !isBlank(str);
-    }
-
-    public static boolean isEmpty(Collection<?> collection) {
-        return collection == null || collection.isEmpty();
-    }
-
-    public static boolean isNotEmpty(Collection<?> collection) {
-        return collection != null && !collection.isEmpty();
     }
 
     /**
