@@ -3,6 +3,7 @@ package com.pugwoo.wooutils.redis;
 import com.pugwoo.wooutils.redis.exception.NotGetLockException;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import com.pugwoo.wooutils.utils.ClassUtils;
+import com.pugwoo.wooutils.utils.InnerCommonUtils;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -18,6 +19,8 @@ import org.springframework.core.annotation.Order;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadPoolExecutor;
 
 @EnableAspectJAutoProxy
 @Aspect
@@ -41,6 +44,10 @@ public class RedisSyncAspect implements InitializingBean {
     private static volatile HeartbeatRenewalTask heartbeatRenewalTask = null; // 不需要多线程
 
     private final long startTimestamp = System.currentTimeMillis();
+
+    private static final ThreadPoolExecutor redisSyncHeartbeatRenewalThreadPool =
+            InnerCommonUtils.createThreadPool(1, 10000, 1,
+                    "Redis-Sync-Heartbeat-Renewal-Thread-Pool");
 
     @Override
     public void afterPropertiesSet() {
@@ -341,7 +348,6 @@ public class RedisSyncAspect implements InitializingBean {
     }
 
     private class HeartbeatRenewalTask extends Thread {
-
         @Override
         public void run() {
             if (redisHelper == null) {
@@ -351,18 +357,39 @@ public class RedisSyncAspect implements InitializingBean {
 
             while (true) { // 一直循环，不会退出
                 long start = System.currentTimeMillis();
+
+                List<Future<?>> futures = new ArrayList<>();
                 for (String key : heartBeatKeys.keySet()) {
-                    HeartBeatInfo heartBeatInfo = heartBeatKeys.get(key);
-                    // 相当于double-check
-                    if (heartBeatInfo != null) {
-                        redisHelper.renewalLock(heartBeatInfo.namespace, heartBeatInfo.key,
-                                heartBeatInfo.lockUuid,
-                                heartBeatInfo.heartbeatExpireSecond);
-                    }
+                    Future<Boolean> future = redisSyncHeartbeatRenewalThreadPool.submit(() -> {
+                        HeartBeatInfo heartBeatInfo = heartBeatKeys.get(key);
+                        // 相当于double-check
+                        if (heartBeatInfo != null) {
+                            try {
+                                redisHelper.renewalLock(heartBeatInfo.namespace, heartBeatInfo.key,
+                                        heartBeatInfo.lockUuid,
+                                        heartBeatInfo.heartbeatExpireSecond);
+                            } catch (Throwable e) {
+                                LOGGER.error("renewalLock throw exception, namespace:{}, key:{}, lockUuid:{}, heartbeatExpireSecond:{}",
+                                        heartBeatInfo.namespace, heartBeatInfo.key, heartBeatInfo.lockUuid, heartBeatInfo.heartbeatExpireSecond, e);
+                            }
+                        }
+                        return true; // 无论如何返回true
+                    });
+                    futures.add(future);
                 }
+                // 等待本批次的更新结束
+                InnerCommonUtils.waitAllFuturesDone(futures);
+
                 long cost = System.currentTimeMillis() - start;
-                if (cost > 3000) {
-                    LOGGER.warn("total heartbeat renewal cost:{}ms > 3000ms, please report at github/pugwoo/redis-helper", cost);
+                if (cost > 3000) { // 增大线程池
+                    int oldCorePoolSize = redisSyncHeartbeatRenewalThreadPool.getCorePoolSize();
+                    int newCorePoolSize = oldCorePoolSize == 1 ? 10 : oldCorePoolSize * 2;
+                    if (newCorePoolSize > 200) {
+                        newCorePoolSize = 200; // 限制最大200条线程
+                    }
+                    redisSyncHeartbeatRenewalThreadPool.setMaximumPoolSize(newCorePoolSize); // MaximumPoolSize必须>=CorePoolSize
+                    redisSyncHeartbeatRenewalThreadPool.setCorePoolSize(newCorePoolSize);
+                    LOGGER.warn("total heartbeat renewal cost:{}ms > 3000ms, increment pool size from {} to {}", cost, oldCorePoolSize, newCorePoolSize);
                 }
 
                 // 3秒heart beat一次，这里是fixed delay，已经考虑到3秒对于30秒的默认超时时长，已经足够了
