@@ -15,7 +15,7 @@ public class RedisLimitParam implements Serializable {
 	private String namespace;
 
 	/** 要控制的时间范围 */
-	private RedisLimitPeroidEnum limitPeroid;
+	private RedisLimitPeriodEnum limitPeriod;
 
 	/** 单位时间内要限制的次数 */
 	private int limitCount;
@@ -23,9 +23,9 @@ public class RedisLimitParam implements Serializable {
 	public RedisLimitParam() {
 	}
 
-	public RedisLimitParam(String namespace, RedisLimitPeroidEnum limitPeroid, int limitCount) {
+	public RedisLimitParam(String namespace, RedisLimitPeriodEnum limitPeriod, int limitCount) {
 		this.namespace = namespace;
-		this.limitPeroid = limitPeroid;
+		this.limitPeriod = limitPeriod;
 		this.limitCount = limitCount;
 	}
 
@@ -37,12 +37,12 @@ public class RedisLimitParam implements Serializable {
 		this.namespace = namespace;
 	}
 
-	public RedisLimitPeroidEnum getLimitPeroid() {
-		return limitPeroid;
+	public RedisLimitPeriodEnum getLimitPeriod() {
+		return limitPeriod;
 	}
 
-	public void setLimitPeroid(RedisLimitPeroidEnum limitPeroid) {
-		this.limitPeroid = limitPeroid;
+	public void setLimitPeriod(RedisLimitPeriodEnum limitPeriod) {
+		this.limitPeriod = limitPeriod;
 	}
 
 	public int getLimitCount() {

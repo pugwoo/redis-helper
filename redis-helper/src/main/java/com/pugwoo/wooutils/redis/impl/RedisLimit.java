@@ -2,7 +2,7 @@ package com.pugwoo.wooutils.redis.impl;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.RedisLimitParam;
-import com.pugwoo.wooutils.redis.RedisLimitPeroidEnum;
+import com.pugwoo.wooutils.redis.RedisLimitPeriodEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,8 +82,8 @@ public class RedisLimit {
 					return -1L;
 				}
 				
-				if(retVal == count && limitParam.getLimitPeroid().getExpireSecond() >= 0) {
-					jedis.expire(fkey, limitParam.getLimitPeroid().getExpireSecond());
+				if(retVal == count && limitParam.getLimitPeriod().getExpireSecond() >= 0) {
+					jedis.expire(fkey, limitParam.getLimitPeriod().getExpireSecond());
 				}
 				
 				if(retVal <= limitParam.getLimitCount()) {
@@ -120,23 +120,23 @@ public class RedisLimit {
 	public static String getKey(RedisLimitParam limitParam, String key) {
 		String time = null;
 		Date now = new Date();
-		if(limitParam.getLimitPeroid() == RedisLimitPeroidEnum.SECOND) {
+		if(limitParam.getLimitPeriod() == RedisLimitPeriodEnum.SECOND) {
 			SimpleDateFormat df = new SimpleDateFormat("yyyyMMddHHmmss");
 			time = df.format(now);
-		} else if (limitParam.getLimitPeroid() == RedisLimitPeroidEnum.TEN_SECOND) {
+		} else if (limitParam.getLimitPeriod() == RedisLimitPeriodEnum.TEN_SECOND) {
 			SimpleDateFormat df = new SimpleDateFormat("yyyyMMddHHmmss");
 			time = df.format(now);
 			time = time.substring(0, time.length() - 1);
-		} else if (limitParam.getLimitPeroid() == RedisLimitPeroidEnum.MINUTE) {
+		} else if (limitParam.getLimitPeriod() == RedisLimitPeriodEnum.MINUTE) {
 			SimpleDateFormat df = new SimpleDateFormat("yyyyMMddHHmm");
 			time = df.format(now);
-		} else if (limitParam.getLimitPeroid() == RedisLimitPeroidEnum.HOUR) {
+		} else if (limitParam.getLimitPeriod() == RedisLimitPeriodEnum.HOUR) {
 			SimpleDateFormat df = new SimpleDateFormat("yyyyMMddHH");
 			time = df.format(now);
-		} else if (limitParam.getLimitPeroid() == RedisLimitPeroidEnum.DAY) {
+		} else if (limitParam.getLimitPeriod() == RedisLimitPeriodEnum.DAY) {
 			SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd");
 			time = df.format(now);
-		} else if (limitParam.getLimitPeroid() == RedisLimitPeroidEnum.WEEK_START_SUNDAY) {
+		} else if (limitParam.getLimitPeriod() == RedisLimitPeriodEnum.WEEK_START_SUNDAY) {
 			Calendar c = Calendar.getInstance();
 			c.set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY);
 			if(c.getTime().after(new Date())) {
@@ -144,7 +144,7 @@ public class RedisLimit {
 			}
 			SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd");
 			time = df.format(c.getTime());
-		} else if (limitParam.getLimitPeroid() == RedisLimitPeroidEnum.WEEK_START_MONDAY) {
+		} else if (limitParam.getLimitPeriod() == RedisLimitPeriodEnum.WEEK_START_MONDAY) {
 			Calendar c = Calendar.getInstance();
 			c.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY);
 			if(c.getTime().after(new Date())) {
@@ -152,13 +152,13 @@ public class RedisLimit {
 			}
 			SimpleDateFormat df = new SimpleDateFormat("yyyyMMdd");
 			time = df.format(c.getTime());
-		} else if (limitParam.getLimitPeroid() == RedisLimitPeroidEnum.MONTH) {
+		} else if (limitParam.getLimitPeriod() == RedisLimitPeriodEnum.MONTH) {
 			SimpleDateFormat df = new SimpleDateFormat("yyyyMM");
 			time = df.format(now);
-		} else if (limitParam.getLimitPeroid() == RedisLimitPeroidEnum.YEAR) {
+		} else if (limitParam.getLimitPeriod() == RedisLimitPeriodEnum.YEAR) {
 			SimpleDateFormat df = new SimpleDateFormat("yyyy");
 			time = df.format(now);
-		} else if (limitParam.getLimitPeroid() == RedisLimitPeroidEnum.PERMANENT) {
+		} else if (limitParam.getLimitPeriod() == RedisLimitPeriodEnum.PERMANENT) {
 			time = "";
 		}
 		
@@ -175,8 +175,8 @@ public class RedisLimit {
 			LOGGER.error("limitEnum.namespace is blank");
 			return false;
 		}
-		if(limitParam.getLimitPeroid() == null) {
-			LOGGER.error("limitEnum.limitPeroid is null");
+		if(limitParam.getLimitPeriod() == null) {
+			LOGGER.error("limitEnum.limitPeriod is null");
 			return false;
 		}
 		if(limitParam.getLimitCount() <= 0) {

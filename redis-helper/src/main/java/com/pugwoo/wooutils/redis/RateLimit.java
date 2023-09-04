@@ -31,7 +31,7 @@ public @interface RateLimit {
     /**
      * [必须] 频率控制的周期
      */
-    RedisLimitPeroidEnum limitPeriod();
+    RedisLimitPeriodEnum limitPeriod();
 
     /**
      * [必须] 单位周期内的调用次数上限

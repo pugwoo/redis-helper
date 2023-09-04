@@ -435,7 +435,6 @@ public class RedisMsgQueue {
             }
 
             for(String topic : topicsInRedis) {
-
                 List<RedisMsg> expires = getExpireDoingMsg(redisHelper, topic);
                 if(expires.isEmpty()) {
                     continue; // 不需要处理
@@ -526,7 +525,7 @@ public class RedisMsgQueue {
                 while(true) { // 一直循环不会退出，除非锁不见了
                     try {
                         boolean hasSleep = doClean();
-                        if(!hasSleep) { // 如果刚清理完，还没睡眠，则睡眠一下
+                        if(!hasSleep) { // 如果刚清理完，还没睡眠，则睡眠一下，避免过于频繁清理，消息恢复的延迟级别是10-30秒
                             doSleep(10000);
                         }
                     } catch (Exception e) {

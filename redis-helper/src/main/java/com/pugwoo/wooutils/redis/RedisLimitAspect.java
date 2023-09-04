@@ -102,7 +102,7 @@ public class RedisLimitAspect {
 
         limitParam.setNamespace(namespace);
         limitParam.setLimitCount(rateLimit.limitCount());
-        limitParam.setLimitPeroid(rateLimit.limitPeriod());
+        limitParam.setLimitPeriod(rateLimit.limitPeriod());
         boolean result = redisHelper.useLimitCount(limitParam, key, 1) > 0; // 默认每次调用算1次，这里暂不需要作为配置
 
         // 如果阻塞等待，则进行阻塞等待尝试
