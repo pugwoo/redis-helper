@@ -6,7 +6,6 @@ import com.pugwoo.wooutils.redis.RedisHelper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import redis.clients.jedis.ScanResult;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -145,31 +144,6 @@ public class TestRedisHelper {
 		assert !redisHelper.compareAndSet(key, "111", value, null);
 	}
 
-	@Test
-	public void testScan() {
-		String prefix = UUID.randomUUID().toString();
-
-		List<String> originKeys = new ArrayList<>();
-		for(int i = 1; i <= 100; i++) {
-			originKeys.add(prefix + "-" + i);
-			redisHelper.setString(prefix + "-" + i, 60, i + "");
-		}
-
-		List<String> redisKeys = new ArrayList<>();
-
-		String lastCursor = null;
-		while(true) {
-			ScanResult<String> keys = redisHelper.getKeys(lastCursor, prefix + "*", 1);
-			redisKeys.addAll(keys.getResult());
-			if(keys.isCompleteIteration()) {
-				break;
-			}
-			lastCursor = keys.getCursor();
-		}
-
-		assert new EqualUtils().ignoreListOrder(true).isEqual(originKeys, redisKeys);
-	}
-	
 	@Test
 	public void testPipeline() {
 		List<Object> objs = redisHelper.executePipeline(pipeline -> {

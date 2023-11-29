@@ -11,8 +11,10 @@ import redis.clients.jedis.*;
 import redis.clients.jedis.params.SetParams;
 
 import java.time.Duration;
-import java.util.*;
-import java.util.Map.Entry;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -445,78 +447,6 @@ public class RedisHelperImpl implements RedisHelper {
 		return result;
 	}
 
-	@Override
-	public ScanResult<String> getKeys(String cursor, String pattern, int count) {
-		if(cursor == null) {
-			cursor = "";
-		}
-		final String _cursor = cursor;
-		return execute(jedis -> {
-			try {
-				ScanParams scanParams = new ScanParams();
-				scanParams.match(pattern);
-				scanParams.count(count);
-				return jedis.scan(_cursor, scanParams);
-			} catch (Exception e) {
-				LOGGER.error("operate jedis SCAN error, pattern:{}, cursor:{}, count:{}",
-						pattern, _cursor, count, e);
-				return null;
-			}
-		});
-	}
-
-	@Override @Deprecated
-	public Set<String> getKeys(String pattern) {
-		return execute(jedis -> {
-			try {
-				return jedis.keys(pattern);
-			} catch (Exception e) {
-				LOGGER.error("operate jedis KEYS error, pattern:{}", pattern, e);
-				return null;
-			}
-		});
-	}
-	
-	@Override @Deprecated
-	public Map<String, String> getStrings(String pattern) {
-		Set<String> keys = getKeys(pattern);
-		if(keys == null) return null;
-		if(keys.isEmpty()) {
-			return new HashMap<>();
-		}
-		
-		List<String> keyList = new ArrayList<>(keys);
-		List<String> vals = getStrings(keyList);
-		if(vals == null) return null;
-		if(keyList.size() != vals.size()) {
-			return null;
-		}
-		Map<String, String> map = new HashMap<>();
-		for(int i = 0; i < keyList.size(); i++) {
-			map.put(keyList.get(i), vals.get(i));
-		}
-		
-		return map;
-	}
-	
-	@Override @Deprecated
-	public <T> Map<String, T> getObjects(String pattern, Class<T> clazz) {
-		if(redisObjectConverter == null) {
-			throw new RuntimeException("IRedisObjectConverter is null");
-		}
-		
-		Map<String, String> vals = getStrings(pattern);
-		if(vals == null) return null;
-		
-		Map<String, T> result = new HashMap<>();
-		for(Entry<String, String> e : vals.entrySet()) {
-			result.put(e.getKey(), redisObjectConverter.
-					convertToObject(e.getValue(), clazz));
-		}
-		
-		return result;
-	}
-	
 	@Override
 	public boolean remove(String key) {
 		return execute(jedis -> {

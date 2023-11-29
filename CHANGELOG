@@ -1,3 +1,5 @@
+v1.3.3 - [del] 删除getKeys、getStrings、getObject方法
+
 2023年9月4日
 v1.3.2 - [enhance] 当分布式锁自动续锁总耗时超过3秒时，自动加大线程池线程数量以减少耗时
 
