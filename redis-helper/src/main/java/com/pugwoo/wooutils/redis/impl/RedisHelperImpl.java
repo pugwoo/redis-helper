@@ -77,7 +77,7 @@ public class RedisHelperImpl implements RedisHelper {
 	protected String host = null;
 	
 	private Integer port = 6379;
-	private Integer maxConnection = 128;
+	private Integer maxConnection = 200;
 	private String password = null;
 	/**指定0~15哪个redis库*/
 	private Integer database = 0;
@@ -644,11 +644,18 @@ public class RedisHelperImpl implements RedisHelper {
 			this.port = port;
 		}
 	}
-	
+
+	/**
+	 * 获取最大连接数
+	 */
 	public Integer getMaxConnection() {
 		return maxConnection;
 	}
 
+	/**
+	 * 设置最大连接数，默认200
+	 * @param maxConnection 最大连接数
+	 */
 	public void setMaxConnection(Integer maxConnection) {
 		this.maxConnection = maxConnection;
 	}

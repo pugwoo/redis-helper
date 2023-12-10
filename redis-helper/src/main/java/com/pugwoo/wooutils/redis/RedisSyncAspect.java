@@ -41,7 +41,7 @@ public class RedisSyncAspect implements InitializingBean {
 
     private static final Map<String, HeartBeatInfo> heartBeatKeys = new ConcurrentHashMap<>(); // 心跳超时秒数
 
-    private static volatile HeartbeatRenewalTask heartbeatRenewalTask = null; // 不需要多线程
+    private static volatile HeartbeatRenewalTask heartbeatRenewalTask = null;
 
     private final long startTimestamp = System.currentTimeMillis();
 
@@ -384,8 +384,8 @@ public class RedisSyncAspect implements InitializingBean {
                 if (cost > 3000) { // 增大线程池
                     int oldCorePoolSize = redisSyncHeartbeatRenewalThreadPool.getCorePoolSize();
                     int newCorePoolSize = oldCorePoolSize == 1 ? 10 : oldCorePoolSize * 2;
-                    if (newCorePoolSize > 200) {
-                        newCorePoolSize = 200; // 限制最大200条线程
+                    if (newCorePoolSize > 100) {
+                        newCorePoolSize = 100; // 分布式锁刷新线程限制最大100条线程
                     }
                     redisSyncHeartbeatRenewalThreadPool.setMaximumPoolSize(newCorePoolSize); // MaximumPoolSize必须>=CorePoolSize
                     redisSyncHeartbeatRenewalThreadPool.setCorePoolSize(newCorePoolSize);
