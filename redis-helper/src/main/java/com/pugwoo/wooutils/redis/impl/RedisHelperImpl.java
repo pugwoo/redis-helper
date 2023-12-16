@@ -260,7 +260,7 @@ public class RedisHelperImpl implements RedisHelper {
 	private ExecutableAccessor compiled = (ExecutableAccessor) MVEL.compileExpression(
 			"jedis.set(key, value, \"NX\", \"EX\", expireSecond)");
 
-	// 标识现在是哪个jedis版本, 2.x == 1, 3.x == 2
+	// 标识现在是哪个jedis版本, 2.x == 2, 3.x == 3, 4.x = 4
 	private AtomicInteger jedisVer = new AtomicInteger(0);
 
 	private boolean v2_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
@@ -291,18 +291,18 @@ public class RedisHelperImpl implements RedisHelper {
 		return execute(jedis -> {
 			try {
 				int _jedisVer = jedisVer.get();
-				if (_jedisVer == 2) {
+				if (_jedisVer == 3) {
 					return v3_setStringIfNotExist(jedis, key, expireSecond, value);
-				} else if (_jedisVer == 1) {
+				} else if (_jedisVer == 2) {
 					return v2_setStringIfNotExist(jedis, key, expireSecond, value);
 				} else {
 					try {
 						boolean result = v3_setStringIfNotExist(jedis, key, expireSecond, value);
-						jedisVer.set(2);
+						jedisVer.set(3);
 						return result;
 					} catch (NoSuchMethodError | NoClassDefFoundError e) { // 同时兼容2.x和3.x的写法
 						boolean result = v2_setStringIfNotExist(jedis, key, expireSecond, value);
-						jedisVer.set(1);
+						jedisVer.set(2);
 						return result;
 					}
 				}
