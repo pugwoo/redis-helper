@@ -21,6 +21,8 @@ public class JedisVersionCompatible {
     // 标识现在是哪个jedis版本, 2.x == 2, 3.x == 3, 4.x = 4
     private static final AtomicInteger jedisVer = new AtomicInteger(0);
 
+    // START of setStringIfNotExist
+
     public static boolean setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
         try {
             int _jedisVer = jedisVer.get();
@@ -45,7 +47,7 @@ public class JedisVersionCompatible {
         }
     }
 
-    private static final ExecutableAccessor compiled = (ExecutableAccessor) MVEL.compileExpression(
+    private static final ExecutableAccessor compiledSetStringIfNotExist = (ExecutableAccessor) MVEL.compileExpression(
             "jedis.set(key, value, \"NX\", \"EX\", expireSecond)");
 
     private static boolean v2_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
@@ -55,8 +57,7 @@ public class JedisVersionCompatible {
         params.put("expireSecond", expireSecond);
         params.put("jedis", jedis);
 
-        // String result = jedis.set(key, value, "NX", "EX", expireSecond);
-        Object result = MVEL.executeExpression(compiled, params); // 该方式对性能几乎没有影响
+        Object result = MVEL.executeExpression(compiledSetStringIfNotExist, params); // 该方式对性能几乎没有影响
         return result != null;
     }
 
@@ -67,4 +68,52 @@ public class JedisVersionCompatible {
         String result = jedis.set(key, value, setParams);
         return result != null;
     }
+
+    // END of setStringIfNotExist
+
+    // START of setString
+
+    public static boolean setString(Jedis jedis, String key, int expireSecond, String value) {
+        try {
+            int _jedisVer = jedisVer.get();
+            if (_jedisVer == 4) {
+                return v4_setString(jedis, key, expireSecond, value);
+            } else if (_jedisVer ==2 || _jedisVer == 3) {
+                return v3_setString(jedis, key, expireSecond, value);
+            } else {
+                try {
+                    boolean result = v3_setString(jedis, key, expireSecond, value);
+                    jedisVer.set(3);
+                    return result;
+                } catch (NoSuchMethodError | NoClassDefFoundError e) {
+                    boolean result = v4_setString(jedis, key, expireSecond, value);
+                    jedisVer.set(4);
+                    return result;
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("setString operate jedis error, key:{}, value:{}", key, value, e);
+            return false;
+        }
+    }
+
+    private static boolean v3_setString(Jedis jedis, String key, int expireSecond, String value) {
+        jedis.setex(key, expireSecond, value);
+        return true;
+    }
+
+    private static final ExecutableAccessor compiledSetString = (ExecutableAccessor) MVEL.compileExpression(
+            "jedis.setex(key, expireSecond, value)");
+
+    private static boolean v4_setString(Jedis jedis, String key, int expireSecond, String value) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("key", key);
+        params.put("value", value);
+        params.put("expireSecond", ((long) expireSecond));
+        params.put("jedis", jedis);
+
+        MVEL.executeExpression(compiledSetString, params);
+        return true;
+    }
+
 }

@@ -231,15 +231,7 @@ public class RedisHelperImpl implements RedisHelper {
 		if(value == null) { // null值不需要设置
 			return true;
 		}
-		return execute(jedis -> {
-			try {
-				jedis.setex(key, expireSecond, value);
-				return true;
-			} catch (Exception e) {
-				LOGGER.error("setString operate jedis error, key:{}, value:{}", key, value, e);
-				return false;
-			}
-		});
+		return execute(jedis -> JedisVersionCompatible.setString(jedis, key, expireSecond, value));
 	}
 	
 	@Override
