@@ -1,4 +1,4 @@
-package com.example.demo;
+package com.pugwoo.redishelpertest.config;
 
 import com.pugwoo.wooutils.cache.HiSpeedCacheAspect;
 import com.pugwoo.wooutils.redis.RedisHelper;
