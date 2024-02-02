@@ -71,9 +71,9 @@ public class RedisLimit {
 			try {
 				Long retVal = null;
 				if(count == 1) {
-					retVal = jedis.incr(fkey);
+					retVal = JedisVersionCompatible.incr(jedis, fkey);
 				} else {
-					retVal = jedis.incrBy(fkey, count);
+					retVal = JedisVersionCompatible.incrBy(jedis, fkey, count);
 				}
 				
 				if(retVal == null) {
@@ -83,16 +83,16 @@ public class RedisLimit {
 				}
 				
 				if(retVal == count && limitParam.getLimitPeriod().getExpireSecond() >= 0) {
-					jedis.expire(fkey, limitParam.getLimitPeriod().getExpireSecond());
+					JedisVersionCompatible.setExpire(jedis, fkey, limitParam.getLimitPeriod().getExpireSecond());
 				}
 				
 				if(retVal <= limitParam.getLimitCount()) {
 					return retVal;
 				} else {
 					if(count == 1) { // 还原现场
-						jedis.decr(fkey);
+						JedisVersionCompatible.decr(jedis, fkey);
 					} else {
-						jedis.decrBy(fkey, count);
+						JedisVersionCompatible.decrBy(jedis, fkey, count);
 					}
 					return -1L; // 已经超额
 				}

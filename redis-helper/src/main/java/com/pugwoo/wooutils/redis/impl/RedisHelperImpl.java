@@ -255,8 +255,7 @@ public class RedisHelperImpl implements RedisHelper {
 	public boolean setExpire(String key, int expireSecond) {
 		return execute(jedis -> {
 			try {
-				jedis.expire(key, expireSecond);
-				return true;
+				return JedisVersionCompatible.setExpire(jedis, key, expireSecond);
 			} catch (Exception e) {
 				LOGGER.error("operate jedis error, key:{}", key, e);
 				return false;
@@ -266,9 +265,9 @@ public class RedisHelperImpl implements RedisHelper {
 	
 	@Override
 	public long getExpireSecond(String key) {
-		return (long) execute(jedis -> {
+		return execute(jedis -> {
 			try {
-				return jedis.ttl(key);
+				return JedisVersionCompatible.getExpireSecond(jedis, key);
 			} catch (Exception e) {
 				LOGGER.error("operate jedis error, key:{}", key, e);
 				return -999L;
@@ -389,8 +388,7 @@ public class RedisHelperImpl implements RedisHelper {
 	public boolean remove(String key) {
 		return execute(jedis -> {
 			try {
-				jedis.del(key);
-				return true;
+				return JedisVersionCompatible.remove(jedis, key);
 			} catch (Exception e) {
 				LOGGER.error("operate jedis error, key:{}", key, e);
 				return false;
