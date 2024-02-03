@@ -217,7 +217,7 @@ public class RedisMsgQueue {
             if(ackTimeoutSec != null) {
                 _redisMsg.setAckTimeout(ackTimeoutSec);
             }
-            jedis.hset(mapKey, uuid, JsonRedisObjectConverter.toJson(_redisMsg));
+            JedisVersionCompatible.hset(jedis, mapKey, uuid, JsonRedisObjectConverter.toJson(_redisMsg));
 
             return _redisMsg;
         });
@@ -293,8 +293,8 @@ public class RedisMsgQueue {
         String doingKey = getDoingKey(topic);
 
         RedisQueueStatus status = new RedisQueueStatus();
-        Long pendingLen = redisHelper.execute(jedis -> jedis.llen(pendingKey));
-        Long doingLen = redisHelper.execute(jedis -> jedis.llen(doingKey));
+        Long pendingLen = redisHelper.execute(jedis -> JedisVersionCompatible.llen(jedis, pendingKey));
+        Long doingLen = redisHelper.execute(jedis -> JedisVersionCompatible.llen(jedis, doingKey));
 
         status.setPendingCount(pendingLen == null ? 0 : pendingLen.intValue());
         status.setDoingCount(doingLen == null ? 0 : doingLen.intValue());
@@ -419,7 +419,7 @@ public class RedisMsgQueue {
                 return;
             }
             topics.put(topic, "");
-            redisHelper.execute(jedis -> jedis.sadd(REDIS_MSG_QUEUE_TOPICS_KEY, topic));
+            redisHelper.execute(jedis -> JedisVersionCompatible.sadd(jedis, REDIS_MSG_QUEUE_TOPICS_KEY, topic));
         }
 
         /**清理过期消息，返回true表示有消费时间为null的情况，已经睡眠了10秒去清理了；返回false则表示没有*/

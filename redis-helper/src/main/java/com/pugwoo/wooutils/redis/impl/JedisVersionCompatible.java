@@ -456,5 +456,139 @@ public class JedisVersionCompatible {
     // END of decrBy
 
 
+    // START of sadd
+
+    public static long sadd(Jedis jedis, String key, String member) {
+        try {
+            int _jedisVer = jedisVer.get();
+            if (_jedisVer == 4) {
+                return v4_sadd(jedis, key, member);
+            } else if (_jedisVer == 2 || _jedisVer == 3) {
+                return v3_sadd(jedis, key, member);
+            } else {
+                try {
+                    long result = v3_sadd(jedis, key, member);
+                    jedisVer.set(3);
+                    return result;
+                } catch (NoSuchMethodError | NoClassDefFoundError e) {
+                    long result = v4_sadd(jedis, key, member);
+                    jedisVer.set(4);
+                    return result;
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("sadd operate jedis error, key:{}, member:{}", key, member, e);
+            return -1;
+        }
+    }
+
+    private static long v3_sadd(Jedis jedis, String key, String member) {
+        return jedis.sadd(key, member);
+    }
+
+    private static final ExecutableAccessor compiledSadd = (ExecutableAccessor) MVEL.compileExpression(
+            "jedis.sadd(key, member)");
+
+    private static long v4_sadd(Jedis jedis, String key, String member) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("key", key);
+        params.put("member", member);
+        params.put("jedis", jedis);
+
+        Object result = MVEL.executeExpression(compiledSadd, params);
+        return (long) result;
+    }
+
+    // END of sadd
+
+    // START of hset
+
+    public static long hset(Jedis jedis, String key, String field, String value) {
+        try {
+            int _jedisVer = jedisVer.get();
+            if (_jedisVer == 4) {
+                return v4_hset(jedis, key, field, value);
+            } else if (_jedisVer == 2 || _jedisVer == 3) {
+                return v3_hset(jedis, key, field, value);
+            } else {
+                try {
+                    long result = v3_hset(jedis, key, field, value);
+                    jedisVer.set(3);
+                    return result;
+                } catch (NoSuchMethodError | NoClassDefFoundError e) {
+                    long result = v4_hset(jedis, key, field, value);
+                    jedisVer.set(4);
+                    return result;
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("hset operate jedis error, key:{}, field:{}, value:{}", key, field, value, e);
+            return -1;
+        }
+    }
+
+    private static long v3_hset(Jedis jedis, String key, String field, String value) {
+        return jedis.hset(key, field, value);
+    }
+
+    private static final ExecutableAccessor compiledHset = (ExecutableAccessor) MVEL.compileExpression(
+            "jedis.hset(key, field, value)");
+
+    private static long v4_hset(Jedis jedis, String key, String field, String value) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("key", key);
+        params.put("field", field);
+        params.put("value", value);
+        params.put("jedis", jedis);
+
+        Object result = MVEL.executeExpression(compiledHset, params);
+        return (long) result;
+    }
+
+    // END of hset
+
+    // START of llen
+
+    public static long llen(Jedis jedis, String key) {
+        try {
+            int _jedisVer = jedisVer.get();
+            if (_jedisVer == 4) {
+                return v4_llen(jedis, key);
+            } else if (_jedisVer == 2 || _jedisVer == 3) {
+                return v3_llen(jedis, key);
+            } else {
+                try {
+                    long result = v3_llen(jedis, key);
+                    jedisVer.set(3);
+                    return result;
+                } catch (NoSuchMethodError | NoClassDefFoundError e) {
+                    long result = v4_llen(jedis, key);
+                    jedisVer.set(4);
+                    return result;
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("llen operate jedis error, key:{}", key, e);
+            return -1;
+        }
+    }
+
+    private static long v3_llen(Jedis jedis, String key) {
+        return jedis.llen(key);
+    }
+
+    private static final ExecutableAccessor compiledLlen = (ExecutableAccessor) MVEL.compileExpression(
+            "jedis.llen(key)");
+
+    private static long v4_llen(Jedis jedis, String key) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("key", key);
+        params.put("jedis", jedis);
+
+        Object result = MVEL.executeExpression(compiledLlen, params);
+        return (long) result;
+    }
+
+    // END of llen
 
 }
