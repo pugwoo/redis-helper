@@ -30,7 +30,7 @@
 		<dependency>
 			<groupId>com.pugwoo</groupId>
 			<artifactId>redis-helper</artifactId>
-			<version>1.3.3</version>
+			<version>1.4.0</version>
 		</dependency>
 
 		<dependency>
@@ -51,11 +51,6 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-				<configuration>
-					<image>
-						<builder>paketobuildpacks/builder-jammy-base:latest</builder>
-					</image>
-				</configuration>
 			</plugin>
 		</plugins>
 	</build>
