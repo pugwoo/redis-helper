@@ -11,6 +11,7 @@
         <module>redis-helper</module>
         <module>redis-helper-test</module>
 		<module>redis-helper-benchmark</module>
+		<module>redis-helper-test-with-springboot3</module>
 	</modules>
 
 </project>

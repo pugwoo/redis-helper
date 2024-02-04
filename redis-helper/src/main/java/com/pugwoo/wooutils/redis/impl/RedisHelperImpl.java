@@ -3,17 +3,13 @@ package com.pugwoo.wooutils.redis.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.pugwoo.wooutils.redis.*;
 import com.pugwoo.wooutils.redis.exception.NoJedisConnectionException;
-import org.mvel2.MVEL;
-import org.mvel2.compiler.ExecutableAccessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.*;
-import redis.clients.jedis.params.SetParams;
 
 import java.time.Duration;
-import java.util.*;
-import java.util.Map.Entry;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -75,7 +71,7 @@ public class RedisHelperImpl implements RedisHelper {
 	protected String host = null;
 	
 	private Integer port = 6379;
-	private Integer maxConnection = 128;
+	private Integer maxConnection = 200;
 	private String password = null;
 	/**指定0~15哪个redis库*/
 	private Integer database = 0;
@@ -235,15 +231,7 @@ public class RedisHelperImpl implements RedisHelper {
 		if(value == null) { // null值不需要设置
 			return true;
 		}
-		return execute(jedis -> {
-			try {
-				jedis.setex(key, expireSecond, value);
-				return true;
-			} catch (Exception e) {
-				LOGGER.error("setString operate jedis error, key:{}, value:{}", key, value, e);
-				return false;
-			}
-		});
+		return execute(jedis -> JedisVersionCompatible.setString(jedis, key, expireSecond, value));
 	}
 	
 	@Override
@@ -255,68 +243,19 @@ public class RedisHelperImpl implements RedisHelper {
 		return setString(key, expireSecond, v);
 	}
 
-	private ExecutableAccessor compiled = (ExecutableAccessor) MVEL.compileExpression(
-			"jedis.set(key, value, \"NX\", \"EX\", expireSecond)");
-
-	// 标识现在是哪个jedis版本, 2.x == 1, 3.x == 2
-	private AtomicInteger jedisVer = new AtomicInteger(0);
-
-	private boolean v2_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
-		Map<String, Object> params = new HashMap<>();
-		params.put("key", key);
-		params.put("value", value);
-		params.put("expireSecond", expireSecond);
-		params.put("jedis", jedis);
-
-		//String result = jedis.set(key, value, "NX", "EX", expireSecond);
-		Object result = MVEL.executeExpression(compiled, params); // 该方式对性能几乎没有影响
-		return result != null;
-	}
-
-	private boolean v3_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
-		SetParams setParams = new SetParams();
-		setParams.nx();
-		setParams.ex(expireSecond);
-		String result = jedis.set(key, value, setParams);
-		return result != null;
-	}
-
 	@Override
 	public boolean setStringIfNotExist(String key, int expireSecond, String value) {
 		if(value == null) { // null值不需要设置
 			return true;
 		}
-		return execute(jedis -> {
-			try {
-				int _jedisVer = jedisVer.get();
-				if (_jedisVer == 2) {
-					return v3_setStringIfNotExist(jedis, key, expireSecond, value);
-				} else if (_jedisVer == 1) {
-					return v2_setStringIfNotExist(jedis, key, expireSecond, value);
-				} else {
-					try {
-						boolean result = v3_setStringIfNotExist(jedis, key, expireSecond, value);
-						jedisVer.set(2);
-						return result;
-					} catch (NoSuchMethodError | NoClassDefFoundError e) { // 同时兼容2.x和3.x的写法
-						boolean result = v2_setStringIfNotExist(jedis, key, expireSecond, value);
-						jedisVer.set(1);
-						return result;
-					}
-				}
-			} catch (Exception e) {
-				LOGGER.error("operate jedis error, key:{}, value:{}", key, value, e);
-				return false;
-			}
-		});
+		return execute(jedis -> JedisVersionCompatible.setStringIfNotExist(jedis, key, expireSecond, value));
 	}
-	
+
 	@Override
 	public boolean setExpire(String key, int expireSecond) {
 		return execute(jedis -> {
 			try {
-				jedis.expire(key, expireSecond);
-				return true;
+				return JedisVersionCompatible.setExpire(jedis, key, expireSecond);
 			} catch (Exception e) {
 				LOGGER.error("operate jedis error, key:{}", key, e);
 				return false;
@@ -326,9 +265,9 @@ public class RedisHelperImpl implements RedisHelper {
 	
 	@Override
 	public long getExpireSecond(String key) {
-		return (long) execute(jedis -> {
+		return execute(jedis -> {
 			try {
-				return jedis.ttl(key);
+				return JedisVersionCompatible.getExpireSecond(jedis, key);
 			} catch (Exception e) {
 				LOGGER.error("operate jedis error, key:{}", key, e);
 				return -999L;
@@ -446,83 +385,10 @@ public class RedisHelperImpl implements RedisHelper {
 	}
 
 	@Override
-	public ScanResult<String> getKeys(String cursor, String pattern, int count) {
-		if(cursor == null) {
-			cursor = "";
-		}
-		final String _cursor = cursor;
-		return execute(jedis -> {
-			try {
-				ScanParams scanParams = new ScanParams();
-				scanParams.match(pattern);
-				scanParams.count(count);
-				return jedis.scan(_cursor, scanParams);
-			} catch (Exception e) {
-				LOGGER.error("operate jedis SCAN error, pattern:{}, cursor:{}, count:{}",
-						pattern, _cursor, count, e);
-				return null;
-			}
-		});
-	}
-
-	@Override @Deprecated
-	public Set<String> getKeys(String pattern) {
-		return execute(jedis -> {
-			try {
-				return jedis.keys(pattern);
-			} catch (Exception e) {
-				LOGGER.error("operate jedis KEYS error, pattern:{}", pattern, e);
-				return null;
-			}
-		});
-	}
-	
-	@Override @Deprecated
-	public Map<String, String> getStrings(String pattern) {
-		Set<String> keys = getKeys(pattern);
-		if(keys == null) return null;
-		if(keys.isEmpty()) {
-			return new HashMap<>();
-		}
-		
-		List<String> keyList = new ArrayList<>(keys);
-		List<String> vals = getStrings(keyList);
-		if(vals == null) return null;
-		if(keyList.size() != vals.size()) {
-			return null;
-		}
-		Map<String, String> map = new HashMap<>();
-		for(int i = 0; i < keyList.size(); i++) {
-			map.put(keyList.get(i), vals.get(i));
-		}
-		
-		return map;
-	}
-	
-	@Override @Deprecated
-	public <T> Map<String, T> getObjects(String pattern, Class<T> clazz) {
-		if(redisObjectConverter == null) {
-			throw new RuntimeException("IRedisObjectConverter is null");
-		}
-		
-		Map<String, String> vals = getStrings(pattern);
-		if(vals == null) return null;
-		
-		Map<String, T> result = new HashMap<>();
-		for(Entry<String, String> e : vals.entrySet()) {
-			result.put(e.getKey(), redisObjectConverter.
-					convertToObject(e.getValue(), clazz));
-		}
-		
-		return result;
-	}
-	
-	@Override
 	public boolean remove(String key) {
 		return execute(jedis -> {
 			try {
-				jedis.del(key);
-				return true;
+				return JedisVersionCompatible.remove(jedis, key);
 			} catch (Exception e) {
 				LOGGER.error("operate jedis error, key:{}", key, e);
 				return false;
@@ -714,11 +580,18 @@ public class RedisHelperImpl implements RedisHelper {
 			this.port = port;
 		}
 	}
-	
+
+	/**
+	 * 获取最大连接数
+	 */
 	public Integer getMaxConnection() {
 		return maxConnection;
 	}
 
+	/**
+	 * 设置最大连接数，默认200
+	 * @param maxConnection 最大连接数
+	 */
 	public void setMaxConnection(Integer maxConnection) {
 		this.maxConnection = maxConnection;
 	}
