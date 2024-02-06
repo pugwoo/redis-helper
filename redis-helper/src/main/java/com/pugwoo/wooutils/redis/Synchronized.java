@@ -46,7 +46,7 @@ public @interface Synchronized {
     /**
      * 锁的心跳超时秒数，默认使用心跳机制。
      * 设置心跳秒数，方便任务执行时间不定的锁。
-     * 默认30秒，建议设置为15或30秒。分布式锁会每3秒钟向redis心跳一次。
+     * 默认30秒。分布式锁会每3秒钟向redis心跳一次。重要的任务可以将心跳超时时间设置长一些，例如300秒。
      * @return bool
      */
 	int heartbeatExpireSecond() default 30;

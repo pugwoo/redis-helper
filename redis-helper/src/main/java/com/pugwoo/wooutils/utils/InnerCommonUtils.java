@@ -85,6 +85,27 @@ public class InnerCommonUtils {
     }
 
     /**
+     * 创建一个线程池，一些默认配置：
+     * 1）空闲线程存活时间为60秒
+     * 2）拒绝策略：用默认，抛出RejectedExecutionException异常
+     * @param coreSize
+     * @param queueSize 任务排队队列最大长度
+     * @param maxSize
+     * @param threadNamePrefix 线程前缀名称
+     * @param threadPriority 线程优先级
+     */
+    public static ThreadPoolExecutor createThreadPool(int coreSize, int queueSize, int maxSize, String threadNamePrefix,
+                                                      Integer threadPriority) {
+        return new ThreadPoolExecutor(
+                coreSize, maxSize,
+                60, // 空闲线程存活时间
+                TimeUnit.SECONDS, // 存活时间单位
+                queueSize <= 0 ? new SynchronousQueue<>() : new LinkedBlockingQueue<>(queueSize),
+                new MyThreadFactory(threadNamePrefix, threadPriority)
+        );
+    }
+
+    /**
      * 等待所有的future调用完成
      */
     public static List<?> waitAllFuturesDone(List<Future<?>> futures) {
@@ -106,14 +127,25 @@ public class InnerCommonUtils {
 
         private final AtomicInteger count = new AtomicInteger(1);
         private final String threadNamePrefix;
+        private final Integer threadPriority;
 
         public MyThreadFactory(String threadNamePrefix) {
             this.threadNamePrefix = threadNamePrefix;
+            this.threadPriority = null;
+        }
+
+        public MyThreadFactory(String threadNamePrefix, Integer threadPriority) {
+            this.threadNamePrefix = threadNamePrefix;
+            this.threadPriority = threadPriority;
         }
 
         @Override
         public Thread newThread(Runnable r) {
-            return new Thread(r, threadNamePrefix + "-" + count.getAndIncrement());
+            Thread thread = new Thread(r, threadNamePrefix + "-" + count.getAndIncrement());
+            if (threadPriority != null) {
+                thread.setPriority(threadPriority);
+            }
+            return thread;
         }
     }
 
