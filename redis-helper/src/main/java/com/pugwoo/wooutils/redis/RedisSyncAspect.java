@@ -47,7 +47,7 @@ public class RedisSyncAspect implements InitializingBean {
 
     private static final ThreadPoolExecutor redisSyncHeartbeatRenewalThreadPool =
             InnerCommonUtils.createThreadPool(1, 10000, 1,
-                    "Redis-Sync-Heartbeat-Renewal-Thread-Pool");
+                    "Redis-Sync-Heartbeat-Renewal-Thread-Pool", Thread.MAX_PRIORITY);
 
     @Override
     public void afterPropertiesSet() {
@@ -57,6 +57,7 @@ public class RedisSyncAspect implements InitializingBean {
         } else {
             heartbeatRenewalTask = new HeartbeatRenewalTask();
             heartbeatRenewalTask.setName("RedisSyncAspect-heartbeat-renewal-thread");
+            heartbeatRenewalTask.setPriority(Thread.MAX_PRIORITY);
             heartbeatRenewalTask.start();
             LOGGER.info("@Synchronized init success, cost:{} ms.", cost);
         }

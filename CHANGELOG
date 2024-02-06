@@ -1,3 +1,6 @@
+v1.4.1 - [enhance] 设置分布式锁的看门狗续锁线程的优先级为10(最高)
+       - [enhance] 当续锁时锁已不存在时，尝试重新加回锁
+
 2024年2月4日
 v1.4.0 - [enhance] 支持jedis 4.x 5.x，也即支持spring boot 3+
        - [del] 删除getKeys、getStrings、getObject方法

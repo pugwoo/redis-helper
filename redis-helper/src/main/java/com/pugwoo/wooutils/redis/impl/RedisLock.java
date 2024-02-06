@@ -5,10 +5,7 @@ import com.pugwoo.wooutils.utils.InnerCommonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * @author nick
@@ -79,17 +76,7 @@ public class RedisLock {
 					lockCount.get().put(newKey, 1);
 					lockUuidTL.get().put(newKey, uuid);
 				}
-
-				// 写入分布式锁的加锁者信息：ip、threadId
-				List<String> ipv4IPs = InnerCommonUtils.getIpv4IPs();
-				String ip = String.join(";", ipv4IPs);
-				Long threadId = Thread.currentThread().getId();
-				Map<String, Object> info = new HashMap<>();
-				info.put("clientIp", ip);
-				info.put("clientThreadId", threadId);
-				info.put("lockTimestamp", System.currentTimeMillis());
-				redisHelper.setObject(newKey + ":lockInfo", maxTransactionSeconds, info);
-
+				recordLockInfo(redisHelper, newKey, maxTransactionSeconds);
 				return uuid;
 			} else {
 				return null;
@@ -105,6 +92,26 @@ public class RedisLock {
             return null;
         }
     }
+
+	/**
+	 * 写入分布式锁的加锁者信息：ip、threadId
+	 */
+	private static void recordLockInfo(RedisHelper redisHelper, String newKey, int maxTransactionSeconds) {
+		List<String> ipv4IPs = new ArrayList<>();
+		try {
+			ipv4IPs = InnerCommonUtils.getIpv4IPs();
+		} catch (Exception e) {
+			LOGGER.error("getIpv4IPs error", e);
+		}
+
+		String ip = String.join(";", ipv4IPs);
+		Long threadId = Thread.currentThread().getId();
+		Map<String, Object> info = new HashMap<>();
+		info.put("clientIp", ip);
+		info.put("clientThreadId", threadId);
+		info.put("lockTimestamp", System.currentTimeMillis());
+		redisHelper.setObject(newKey + ":lockInfo", maxTransactionSeconds, info);
+	}
 
     /**
      * 续期锁，也即延长锁的过时时间，需要提供锁的uuid，
@@ -129,7 +136,17 @@ public class RedisLock {
 			if(value == null) {
 				// 存在一种场景，在debug模式下，因为断点，所有线程都没有按时执行，导致redis锁被释放了，这时候就会出现这种情况
 				// 这种情况属于debug本地开发情况，所以暂不进行处理
-				LOGGER.error("renewalLock namespace:{}, key:{}, lock not exist", namespace, key);
+				LOGGER.error("renewalLock namespace:{}, key:{}, lock not exist, try to lock back", namespace, key);
+
+				// 此时，尝试重新加锁，这里可能有一种极端情况，就是刚好这个锁是正常被释放的，此时重新加锁是多余的，但不会有严重的问题，等过期时间到了就会释放
+				boolean result = redisHelper.setStringIfNotExist(newKey, maxTransactionSeconds, lockUuid);
+				if (result) {
+					LOGGER.info("renewalLock namespace:{}, key:{}, lock not exist, lock back success", namespace, key);
+					recordLockInfo(redisHelper, newKey, maxTransactionSeconds);
+				} else {
+					LOGGER.error("renewalLock namespace:{}, key:{}, lock not exist, lock back fail", namespace, key);
+				}
+
 				return false;
 			} else if (!value.equals(lockUuid)) {
 				LOGGER.error("renewalLock namespace:{}, key:{}, lockUuid not match, given:{}, in redis:{}",
