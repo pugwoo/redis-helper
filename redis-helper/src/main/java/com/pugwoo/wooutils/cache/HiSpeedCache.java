@@ -18,6 +18,9 @@ public @interface HiSpeedCache {
 
     /**
      * [可选] 高速缓存的不同的key的mvel表达式脚本，可以从参数列表变量args中获取<br>
+     * <br>
+     * 例如，分布式锁注解在方法void foo(int a, String b) 上，那么设置keyScript为 args[0]+args[1] 来实现不同参数a/b不同锁。
+     * <br>
      * @return 【重要】如果脚本执行出错，则打log，然后直接调用方法，等价于缓存失效。如果脚本直接结果返回null，则等价于空字符
      */
     String keyScript() default "";

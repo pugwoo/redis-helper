@@ -20,6 +20,8 @@ public class RedisMsgQueue {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisMsgQueue.class);
     private static final String REDIS_MSG_QUEUE_TOPICS_KEY = "_RedisMsgQueueTopics_";
+    /**默认消息的确认超时时间，当消费者超过这个时间不确认，消息将回到等待队列重新投递*/
+    private static final int defaultActTimeoutSec = 3600;
 
     private static String getPendingKey(String topic) {
         return topic + ":" + "MQLIST";
@@ -32,21 +34,21 @@ public class RedisMsgQueue {
     private static String getMapKey(String topic) {
         return topic + ":" + "MQMSG";
     }
-    
+
     /** 生成一个消息uuid */
     private static String getMsgUuid() {
         return "rmq" + UUID.randomUUID().toString().replace("-", "");
     }
 
     /**
-     * 发送消息，返回消息的uuid。默认的超时时间是30秒
+     * 发送消息，返回消息的uuid。默认的超时时间是86400秒
      * @param redisHelper
      * @param topic topic将是redis的key
      * @param msg
      * @return
      */
     public static String send(RedisHelper redisHelper, String topic, String msg) {
-        return send(redisHelper, topic, msg, 30);
+        return send(redisHelper, topic, msg, defaultActTimeoutSec);
     }
 
     /**
@@ -95,21 +97,22 @@ public class RedisMsgQueue {
     }
     
     /**
-     * 发送消息，返回消息的uuidList。默认的超时时间是30秒
+     * 发送消息，返回消息的uuidList。默认的超时时间是86400秒
      * @param redisHelper
      * @param topic topic将是redis的key
      * @param msgList 消息内容列表
      * @return 消息的uuidList，发送失败返回null
      */
     public static List<String> sendBatch(RedisHelper redisHelper, String topic, List<String> msgList) {
-        return sendBatch(redisHelper, topic, msgList, 30);
+        return sendBatch(redisHelper, topic, msgList, defaultActTimeoutSec);
     }
     
     /**
-     * 发送消息，返回消息的uuidList。默认的超时时间是30秒
+     * 发送消息，返回消息的uuidList。
      * @param redisHelper
      * @param topic   topic将是redis的key
      * @param msgList 消息内容列表
+     * @param defaultAckTimeoutSec 默认ack超时时间：当消费者消费了消息却没来得及设置ack超时时间时的默认超时秒数。
      * @return 消息的uuidList，发送失败返回null
      */
     public static List<String> sendBatch(RedisHelper redisHelper, String topic, List<String> msgList, int defaultAckTimeoutSec) {
@@ -206,9 +209,15 @@ public class RedisMsgQueue {
             String msgJson = jedis.hget(mapKey, uuid);
             if(msgJson == null || msgJson.isEmpty()) {
                 // 说明消息已经被消费了，清理掉uuid即可
-                // jedis.lrem(listKey, 0, uuid); // 去掉移除listKey，属于低概率，当消息堆积时，该命令时间复杂度是O(N)
-                jedis.lrem(doingKey, 0, uuid);
-                LOGGER.warn("get uuid:{} msg fail, msg is empty", uuid);
+                //
+                long removedCount = jedis.lrem(doingKey, 0, uuid);
+                if (removedCount == 0) { // 如果doing列表里没有，一般是任务超时后被移回到listKey里了，此时再去listKey删除一遍
+                    removedCount = jedis.lrem(listKey, 0, uuid); // 去掉移除listKey，当消息堆积时，该命令时间复杂度是O(N)，因此才放到if里
+                    if (removedCount == 0) {
+                        LOGGER.warn("get uuid:{} msg fail, msg is empty, remove uuid from both pending and doing list fail", uuid);
+                    }
+                }
+                LOGGER.warn("get uuid:{} msg fail, msg is empty, this msg uuid will be removed.", uuid);
                 return null;
             }
 

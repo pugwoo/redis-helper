@@ -29,7 +29,10 @@ public @interface Synchronized {
 	String namespace() default "";
 
 	/**
-	 * [可选] 分布式锁的不同的key的mvel表达式脚本，可以从参数列表变量args中获取
+	 * [可选] 分布式锁的不同的key的mvel表达式脚本，可以从参数列表变量args中获取。
+	 * <br>
+	 * 例如，分布式锁注解在方法void foo(int a, String b) 上，那么设置keyScript为 args[0]+args[1] 来实现不同参数a/b不同锁。
+	 * <br>
 	 * @return 【重要】如果脚本执行出错，则打log，并等价于空字符串，并不会抛出异常阻止调用进行
 	 */
 	String keyScript() default "";
