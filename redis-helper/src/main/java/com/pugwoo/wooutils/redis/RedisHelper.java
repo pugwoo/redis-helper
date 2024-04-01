@@ -255,12 +255,30 @@ public interface RedisHelper {
 	Long getAutoIncrementId(String namespace);
 
 	/**
+	 * 批量获得自增id，从1开始<br/>
+	 * 说明：自增ID的namespace永久生效，如需设置自动过期清理时间，请使用getAutoIncrementId带expireSeconds参数的方法
+	 * @param namespace 必须，由使用方自定决定，用于区分不同的业务。实际redis key会加上_ID后缀
+	 * @param batchNum 批量获取的数量
+	 * @return 获取失败(例如网络原因不通等)返回null，注意判断和重试
+	 */
+	List<Long> getAutoIncrementIdBatch(String namespace, int batchNum);
+
+	/**
 	 * 获得自增id，从1开始
 	 * @param namespace 必须，由使用方自定决定，用于区分不同的业务。实际redis key会加上_ID后缀
 	 * @param expireSeconds 过期时间，大于0时生效；重新获取时会重新设置过期时间
 	 * @return 获取失败(例如网络原因不通等)返回null，注意判断和重试
 	 */
 	Long getAutoIncrementId(String namespace, int expireSeconds);
+
+	/**
+	 * 批量获得自增id，从1开始<br/>
+	 * @param namespace 必须，由使用方自定决定，用于区分不同的业务。实际redis key会加上_ID后缀
+	 * @param expireSeconds 过期时间，大于0时生效；重新获取时会重新设置过期时间
+	 * @param batchNum 批量获取的数量
+	 * @return 获取失败(例如网络原因不通等)返回null，注意判断和重试
+	 */
+	List<Long> getAutoIncrementIdBatch(String namespace, int batchNum, int expireSeconds);
 
 	/////////////////// Redis 带 ACK 机制的消息队列 ///////////////////////////////
 

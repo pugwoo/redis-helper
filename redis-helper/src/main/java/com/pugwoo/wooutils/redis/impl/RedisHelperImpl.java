@@ -481,8 +481,18 @@ public class RedisHelperImpl implements RedisHelper {
 	}
 
 	@Override
+	public List<Long> getAutoIncrementIdBatch(String namespace, int batchNum) {
+		return RedisAutoIncrementId.getAutoIncrementIdBatch(this, namespace, batchNum);
+	}
+
+	@Override
 	public Long getAutoIncrementId(String namespace, int expireSeconds) {
 		return RedisAutoIncrementId.getAutoIncrementId(this, namespace, expireSeconds);
+	}
+
+	@Override
+	public List<Long> getAutoIncrementIdBatch(String namespace, int batchNum, int expireSeconds) {
+		return RedisAutoIncrementId.getAutoIncrementIdBatch(this, namespace, batchNum, expireSeconds);
 	}
 
 	private void addTopicToTask(String topic) {
