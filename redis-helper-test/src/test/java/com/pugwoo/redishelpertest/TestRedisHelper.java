@@ -11,9 +11,9 @@ import java.math.BigDecimal;
 import java.util.*;
 
 @SpringBootTest
-public class TestRedisHelper {
-	
-    @Autowired
+class TestRedisHelper {
+
+	@Autowired
 	private RedisHelper redisHelper;
 
 	@Test
@@ -33,14 +33,14 @@ public class TestRedisHelper {
 		assert redisHelper.getString(oldKey) == null;
 		assert redisHelper.getString(newKey).equals(value);
 	}
-	
+
 	@Test
 	public void testBasicGetSet() {
 		String key = "mytest" + UUID.randomUUID().toString();
 		String value = UUID.randomUUID().toString();
 		redisHelper.setString(key, 10, value);
 		String value2 = redisHelper.getString(key);
-	    assert value.equals(value2);
+		assert value.equals(value2);
 
 		long expireSecond = redisHelper.getExpireSecond(key);
 		assert expireSecond > 5 && expireSecond <= 10;
@@ -94,7 +94,7 @@ public class TestRedisHelper {
 
 	}
 
-    @Test
+	@Test
 	public void testDelete() {
 		String key = UUID.randomUUID().toString();
 		String value = UUID.randomUUID().toString();
@@ -114,7 +114,7 @@ public class TestRedisHelper {
 		redisHelper.remove(key, value); // 应该删除掉
 		assert redisHelper.getString(key) == null;
 	}
-	
+
 	@Test
 	public void testSetIfNotExist() {
 		String key = "mytest" + UUID.randomUUID().toString();
@@ -128,7 +128,7 @@ public class TestRedisHelper {
 		assert redisHelper.getString(key).equals("you1");
 	}
 
-    @Test
+	@Test
 	public void testCAS() {
 		String key = UUID.randomUUID().toString();
 		String value = UUID.randomUUID().toString();
@@ -140,7 +140,7 @@ public class TestRedisHelper {
 
 		assert "111".equals(redisHelper.getString(key));
 		assert redisHelper.getExpireSecond(key) > 25 && redisHelper.getExpireSecond(key) <= 30;
-	
+
 		assert !redisHelper.compareAndSet(key, "111", value, null);
 	}
 
@@ -158,7 +158,7 @@ public class TestRedisHelper {
 
 		redisHelper.remove("hello");
 	}
-	
+
 	@Test
 	public void testTransaction() {
 		String key = UUID.randomUUID().toString();
@@ -173,5 +173,4 @@ public class TestRedisHelper {
 
 		redisHelper.remove(key);
 	}
-
 }
