@@ -1,8 +1,9 @@
 package com.pugwoo.redishelpertest.redis.sync;
 
 import com.pugwoo.wooutils.redis.Synchronized;
-import java.util.Date;
 import org.springframework.stereotype.Service;
+
+import java.util.Date;
 
 @Service
 public class HelloServiceWithMutilLock {
