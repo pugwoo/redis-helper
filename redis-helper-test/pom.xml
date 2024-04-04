@@ -33,13 +33,13 @@
 		<dependency>
 			<groupId>com.pugwoo</groupId>
 			<artifactId>redis-helper</artifactId>
-			<version>1.4.2</version>
+			<version>1.4.3</version>
 		</dependency>
 
 		<dependency>
 			<groupId>com.pugwoo</groupId>
 			<artifactId>woo-utils</artifactId>
-			<version>1.1.9</version>
+			<version>1.2.4</version>
 		</dependency>
 
 		<dependency>
@@ -47,6 +47,13 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<dependency>
+			<groupId>org.junit.platform</groupId>
+			<artifactId>junit-platform-commons</artifactId>
+			<version>1.5.2</version>
+		</dependency>
+
 	</dependencies>
 
 	<build>

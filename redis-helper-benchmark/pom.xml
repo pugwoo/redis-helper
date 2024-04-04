@@ -30,13 +30,13 @@
         <dependency>
             <groupId>com.pugwoo</groupId>
             <artifactId>redis-helper</artifactId>
-            <version>1.4.2</version>
+            <version>1.4.3</version>
         </dependency>
 
         <dependency>
             <groupId>com.pugwoo</groupId>
             <artifactId>woo-utils</artifactId>
-            <version>1.1.1</version>
+            <version>1.2.4</version>
         </dependency>
 
         <dependency>
