@@ -340,7 +340,11 @@ public class RedisSyncAspect implements InitializingBean {
      */
     private void mayThrowExceptionIfNotGetLock(Synchronized sync, Method targetMethod, String namespace, String key) {
         if (sync.throwExceptionIfNotGetLock()) {
-            throw new NotGetLockException(targetMethod, namespace, key);
+            if (sync.customExceptionMessage() != null && !sync.customExceptionMessage().isEmpty()) {
+                throw new NotGetLockException(targetMethod, namespace, key, sync.customExceptionMessage());
+            } else {
+                throw new NotGetLockException(targetMethod, namespace, key);
+            }
         }
     }
 

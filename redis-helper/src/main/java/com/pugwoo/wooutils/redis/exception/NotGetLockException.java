@@ -20,7 +20,14 @@ public class NotGetLockException extends RuntimeException {
     
     /** 分布式锁的key，由 {@link Synchronized#keyScript()} 运算成功得出 */
     private final String key;
-    
+
+    public NotGetLockException(Method targetMethod, String namespace, String key, String customErrMsg) {
+        super(customErrMsg);
+        this.targetMethod = targetMethod;
+        this.namespace = namespace;
+        this.key = key;
+    }
+
     public NotGetLockException(Method targetMethod, String namespace, String key) {
         super("Fail to require distributed lock, key:" + RedisLock.getKey(namespace, key) + ", targetMethod:" + targetMethod);
         this.targetMethod = targetMethod;
