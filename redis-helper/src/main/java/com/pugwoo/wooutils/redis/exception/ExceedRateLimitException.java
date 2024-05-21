@@ -21,6 +21,14 @@ public class ExceedRateLimitException extends RuntimeException {
     /** 限频器的key，由 {@link RateLimit#keyScript()} 运算成功得出 */
     private final String key;
 
+    public ExceedRateLimitException(Method targetMethod, String key, RedisLimitParam limitParam,
+                                    String customExceptionMsg) {
+        super(customExceptionMsg);
+        this.targetMethod = targetMethod;
+        this.limitParam = limitParam;
+        this.key = key;
+    }
+
     public ExceedRateLimitException(Method targetMethod, String key, RedisLimitParam limitParam) {
         super("Exceed rate limit, key:" + RedisLimit.getKey(limitParam, key) + ", targetMethod:" + targetMethod);
         this.targetMethod = targetMethod;
