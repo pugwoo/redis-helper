@@ -1,4 +1,6 @@
-v1.4.4 - [enhance] 优化日志输出
+v1.4.4 - [fix] 【重要升级提示】Redis消息队列支持redis集群，原来当消息队列的3个key被分布到不同的slot时会导致消息队列失败
+                升级后，原来的topic会被变成{topic}，请手工将老的topic数据复制到{topic}下，或保留老消费者等待原topic消息消费完
+       - [enhance] 优化日志输出
 
 2024年4月4日
 v1.4.3 - [add] getAutoIncrementId增加批量获取自增id的方法
