@@ -1,7 +1,9 @@
+2024年5月22日
 v1.5.0 - [fix] 【重要升级提示】Redis消息队列支持redis集群，原来当消息队列的3个key被分布到不同的slot时会导致消息队列失败
                 升级后，原来的topic会被变成{topic}，请手工将老的topic数据复制到{topic}下，或保留老消费者等待原topic消息消费完
        - [enhance] @Synchronized和@RateLimit支持设置自定义异常消息
        - [enhance] 优化日志输出
+       - [enhance] RedisSyncContext增加记录是否成功释放锁的信息
 
 2024年4月4日
 v1.4.3 - [add] getAutoIncrementId增加批量获取自增id的方法

@@ -108,6 +108,7 @@ public class RedisSyncAspect implements InitializingBean {
         try {
             if (params.size() - 1 == i) {
                 RedisSyncContext.recordSuccessTotalLockCost(System.currentTimeMillis() - startTime);
+                RedisSyncContext.set(true, true);
                 return param.pjp.proceed();
             }
             return proceed(params, i + 1, startTime);
@@ -149,6 +150,7 @@ public class RedisSyncAspect implements InitializingBean {
             heartBeatKeys.remove(redisSyncRet.uuid);
         }
         boolean result = redisHelper.releaseLock(p.namespace, p.key, redisSyncRet.lockUuid, p.isReentrantLock);
+        RedisSyncContext.setIsReleaseLockSuccess(result);
         logReleaseLock(p, redisSyncRet.lockUuid, result);
     }
 
@@ -179,7 +181,6 @@ public class RedisSyncAspect implements InitializingBean {
                     uuid = putToHeatBeat(p, lockUuid);
                 }
 
-                RedisSyncContext.set(true, true);
                 return RedisSyncRet.successGetLock(uuid, lockUuid, System.currentTimeMillis() - start, i);
             }
 
