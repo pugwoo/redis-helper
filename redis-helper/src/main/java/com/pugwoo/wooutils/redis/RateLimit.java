@@ -53,7 +53,13 @@ public @interface RateLimit {
      * 是否在获取不到调用资格时抛出异常 <br>
      * 默认抛出异常 <br>
      * 如果设置为true，则当获取不到资格时，抛出 {@link ExceedRateLimitException}
+     * 如果设置为false，则限频的方法将不执行，直接返回null
      */
     boolean throwExceptionIfExceedRateLimit() default true;
+
+    /**
+     * 抛出异常时的自定义消息，当throwExceptionIfExceedRateLimit=true时生效
+     */
+    String customExceptionMessage() default "";
 
 }

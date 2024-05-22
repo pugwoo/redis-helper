@@ -24,15 +24,15 @@ public class RedisMsgQueue {
     private static final int defaultActTimeoutSec = 3600;
 
     private static String getPendingKey(String topic) {
-        return topic + ":" + "MQLIST";
+        return "{" + topic + "}:" + "MQLIST"; // 特别说明：使用redis hash tag来使得key落到同一个分片
     }
 
     private static String getDoingKey(String topic) {
-        return topic + ":" + "MQDOING";
+        return "{" + topic + "}:" + "MQDOING"; // 特别说明：使用redis hash tag来使得key落到同一个分片
     }
 
     private static String getMapKey(String topic) {
-        return topic + ":" + "MQMSG";
+        return "{" + topic + "}:" + "MQMSG"; // 特别说明：使用redis hash tag来使得key落到同一个分片
     }
 
     /** 生成一个消息uuid */

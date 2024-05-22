@@ -67,7 +67,12 @@ public @interface Synchronized {
 	 * @return bool
 	 */
 	boolean logDebug() default false;
-	
+
+	/**
+	 * 是否是可重入锁，默认是可重入锁
+	 */
+	boolean isReentrantLock() default true;
+
 	/**
 	 * 是否在获取不到分布式锁时抛出异常 <br>
 	 * 默认抛出异常 @since 1.3.0 <br>
@@ -76,7 +81,8 @@ public @interface Synchronized {
 	boolean throwExceptionIfNotGetLock() default true;
 
 	/**
-	 * 是否是可重入锁，默认是可重入锁
+	 * 抛出异常时的自定义消息，当throwExceptionIfNotGetLock=true时生效
 	 */
-	boolean isReentrantLock() default true;
+	String customExceptionMessage() default "";
+
 }

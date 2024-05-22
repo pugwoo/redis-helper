@@ -330,8 +330,9 @@ public class HiSpeedCacheAspect implements InitializingBean {
         } else {
             // 当keyScript没有设置，而方法的参数的个数又不是0个时，打印告警日志，这种情况一般是有问题的
             if (pjp.getArgs() != null && pjp.getArgs().length > 0) {
-                LOGGER.warn("HiSpeedCache keyScript is empty, while method args size is bigger than zero, method:{}",
-                        ((MethodSignature) pjp.getSignature()).getMethod().getName());
+                LOGGER.warn("HiSpeedCache keyScript is empty, while method args is not empty, method:{}, class:{}",
+                        ((MethodSignature) pjp.getSignature()).getMethod().getName(),
+                        pjp.getTarget().getClass().getName());
             }
         }
 

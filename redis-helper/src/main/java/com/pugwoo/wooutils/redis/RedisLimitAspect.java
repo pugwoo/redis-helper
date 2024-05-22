@@ -46,7 +46,7 @@ public class RedisLimitAspect {
 
         for (RateLimit rateLimit : value) {
             String key = genKey(rateLimit.keyScript(), pjp.getArgs());
-            if (!requireLock(rateLimit, key, rateLimit.throwExceptionIfExceedRateLimit(), targetMethod)) {
+            if (!requireLock(rateLimit, key, rateLimit.throwExceptionIfExceedRateLimit(), targetMethod, rateLimit.customExceptionMessage())) {
                 return null;
             }
         }
@@ -66,7 +66,7 @@ public class RedisLimitAspect {
         RateLimit limits = targetMethod.getAnnotation(RateLimit.class);
 
         String key = genKey(limits.keyScript(), pjp.getArgs());
-        if (requireLock(limits, key, limits.throwExceptionIfExceedRateLimit(), targetMethod)) {
+        if (requireLock(limits, key, limits.throwExceptionIfExceedRateLimit(), targetMethod, limits.customExceptionMessage())) {
             return pjp.proceed();
         } else {
             return null;
@@ -92,7 +92,7 @@ public class RedisLimitAspect {
     }
 
     private boolean requireLock(RateLimit rateLimit, String key, boolean throwExceptionIfExceedRateLimit,
-                                Method targetMethod) {
+                                Method targetMethod, String customExceptionMessage) {
         RedisLimitParam limitParam = new RedisLimitParam();
 
         String namespace = rateLimit.namespace();
@@ -142,7 +142,11 @@ public class RedisLimitAspect {
         }
 
         if (!result && throwExceptionIfExceedRateLimit) {
-            throw new ExceedRateLimitException(targetMethod, key, limitParam);
+            if (customExceptionMessage != null && !customExceptionMessage.isEmpty()) {
+                throw new ExceedRateLimitException(targetMethod, key, limitParam, customExceptionMessage);
+            } else {
+                throw new ExceedRateLimitException(targetMethod, key, limitParam);
+            }
         }
         return result;
     }

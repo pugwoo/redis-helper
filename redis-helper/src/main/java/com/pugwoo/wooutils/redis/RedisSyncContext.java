@@ -29,6 +29,11 @@ public class RedisSyncContext {
     private boolean haveRun;
 
     /**
+     * 是否成功释放了分布式锁
+     */
+    private boolean isReleaseLockSuccess;
+
+    /**
      * 这里没有用 ThreadLocal， 因此是多个线程的总共耗时
      * 这里统计多个锁一起获取成功相关信息:
      * 1. 总成功锁数: getTotalLockNum
@@ -61,6 +66,13 @@ public class RedisSyncContext {
         CONTEXT_TL.set(context);
     }
 
+    protected static void setIsReleaseLockSuccess(boolean isReleaseLockSuccess) {
+        RedisSyncContext redisSyncContext = CONTEXT_TL.get();
+        if (redisSyncContext != null) {
+            redisSyncContext.isReleaseLockSuccess = isReleaseLockSuccess;
+        }
+    }
+
     /**
      * 是否有执行了方法
      *
@@ -87,4 +99,14 @@ public class RedisSyncContext {
         return context.isSync;
     }
 
+    /**
+     * 是否成功释放了分布式锁
+     */
+    public static boolean getIsReleaseLockSuccess() {
+        RedisSyncContext context = CONTEXT_TL.get();
+        if (context == null) {
+            return false;
+        }
+        return context.isReleaseLockSuccess;
+    }
 }
