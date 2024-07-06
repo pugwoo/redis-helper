@@ -110,7 +110,7 @@ public class RedisLock {
 		info.put("clientIp", ip);
 		info.put("clientThreadId", threadId);
 		info.put("lockTimestamp", System.currentTimeMillis());
-		redisHelper.setObject(newKey + ":lockInfo", maxTransactionSeconds, info);
+		redisHelper.setObject(newKey + ".lockInfo", maxTransactionSeconds, info);
 	}
 
     /**
@@ -157,7 +157,7 @@ public class RedisLock {
 				// 而且出现了也没有大的问题，只是帮另外一个锁续期了一次，后续也不会一直续期
 				boolean result = redisHelper.setExpire(newKey, maxTransactionSeconds);
 				if (result) {
-					redisHelper.setExpire(newKey + ":lockInfo", maxTransactionSeconds);
+					redisHelper.setExpire(newKey + ".lockInfo", maxTransactionSeconds);
 				}
 				return result;
 			}
