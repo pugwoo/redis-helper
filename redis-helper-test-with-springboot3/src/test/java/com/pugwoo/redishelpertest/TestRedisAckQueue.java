@@ -60,8 +60,8 @@ public class TestRedisAckQueue {
 
     @Test
     public void testTimeout() {
-        String randomTopic = "mytopic-" + UUID.randomUUID().toString();
-        String body = "msgconent" + UUID.randomUUID().toString();
+        String randomTopic = "mytopic-" + UUID.randomUUID();
+        String body = "msgconent" + UUID.randomUUID();
 
         String uuid = redisHelper.send(randomTopic, body, 10);
 
@@ -75,12 +75,16 @@ public class TestRedisAckQueue {
         msg = redisHelper.receive(randomTopic); // 阻塞
         long t2 = System.currentTimeMillis();
         assert msg != null;
+        assert msg.getUuid().equals(uuid);
         assert msg.getMsg().equals(body);
 
         System.out.println("cost:" + (t2 - t1) + "ms");
         assert t2 - t1 >= 10000 && t2 - t1 <= 31000; // 特别说明：因为清理seq的线程有分布式锁，过期30秒，所以如果上一个锁还没释放且程序挂了，最长会等待30秒
+
+        // 最后ack消息，让队列清理掉
+        assert redisHelper.ack(randomTopic, msg.getUuid());
     }
-    
+
     @Test
     public void testSendBatch() {
         String randomTopic = "mytopic-" + UUID.randomUUID().toString();
