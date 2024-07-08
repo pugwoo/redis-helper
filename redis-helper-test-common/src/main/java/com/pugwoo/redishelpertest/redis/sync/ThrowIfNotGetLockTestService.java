@@ -2,11 +2,9 @@ package com.pugwoo.redishelpertest.redis.sync;
 
 import com.pugwoo.wooutils.lang.DateUtils;
 import com.pugwoo.wooutils.redis.Synchronized;
-import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
-@Service
 public class ThrowIfNotGetLockTestService {
     
     /** 获取不到锁不抛异常 */

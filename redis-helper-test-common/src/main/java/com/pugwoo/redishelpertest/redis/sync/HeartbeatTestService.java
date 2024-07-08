@@ -1,12 +1,10 @@
 package com.pugwoo.redishelpertest.redis.sync;
 
 import com.pugwoo.wooutils.redis.Synchronized;
-import org.springframework.stereotype.Service;
 
 import java.util.Date;
 import java.util.UUID;
 
-@Service
 public class HeartbeatTestService {
 
     // 等待时间故意设置很长，一直要等到可以执行为止

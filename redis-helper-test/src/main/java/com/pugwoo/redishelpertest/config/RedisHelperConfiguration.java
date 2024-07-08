@@ -2,6 +2,10 @@ package com.pugwoo.redishelpertest.config;
 
 import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
 import com.pugwoo.redishelpertest.ratelimit.RateLimitService;
+import com.pugwoo.redishelpertest.redis.sync.HeartbeatTestService;
+import com.pugwoo.redishelpertest.redis.sync.HelloService;
+import com.pugwoo.redishelpertest.redis.sync.HelloServiceWithMutilLock;
+import com.pugwoo.redishelpertest.redis.sync.ThrowIfNotGetLockTestService;
 import com.pugwoo.wooutils.cache.HiSpeedCacheAspect;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.RedisLimitAspect;
@@ -54,6 +58,26 @@ public class RedisHelperConfiguration {
     @Bean
     public RateLimitService rateLimitService() {
         return new RateLimitService();
+    }
+
+    @Bean
+    public HeartbeatTestService heartbeatTestService() {
+        return new HeartbeatTestService();
+    }
+
+    @Bean
+    public HelloService helloService() {
+        return new HelloService();
+    }
+
+    @Bean
+    public HelloServiceWithMutilLock helloServiceWithMutilLock() {
+        return new HelloServiceWithMutilLock();
+    }
+
+    @Bean
+    public ThrowIfNotGetLockTestService throwIfNotGetLockTestService() {
+        return new ThrowIfNotGetLockTestService();
     }
 
 }
