@@ -2,9 +2,7 @@ package com.pugwoo.redishelpertest.ratelimit;
 
 import com.pugwoo.wooutils.redis.RateLimit;
 import com.pugwoo.wooutils.redis.RedisLimitPeriodEnum;
-import org.springframework.stereotype.Service;
 
-@Service
 public class RateLimitService {
 
     @RateLimit(limitPeriod = RedisLimitPeriodEnum.MINUTE, limitCount = 20000, waitMillisecond = 0)
