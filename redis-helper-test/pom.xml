@@ -54,6 +54,12 @@
 			<version>1.5.2</version>
 		</dependency>
 
+		<dependency>
+			<groupId>com.pugwoo</groupId>
+			<artifactId>redis-helper-test-common</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+		</dependency>
+
 	</dependencies>
 
 	<build>
