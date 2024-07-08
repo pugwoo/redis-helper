@@ -1,7 +1,6 @@
 package com.pugwoo.redishelpertest.cache;
 
 import com.pugwoo.wooutils.cache.HiSpeedCache;
-import org.springframework.stereotype.Service;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -10,7 +9,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * 这里测试的接口都sleep 3秒，故意制造比较慢的
  */
-@Service
 public class WithCacheDemoService {
 
     private AtomicInteger getSomething = new AtomicInteger(0);

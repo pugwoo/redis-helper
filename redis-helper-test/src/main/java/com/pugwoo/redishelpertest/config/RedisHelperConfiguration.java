@@ -1,5 +1,6 @@
 package com.pugwoo.redishelpertest.config;
 
+import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
 import com.pugwoo.wooutils.cache.HiSpeedCacheAspect;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.RedisLimitAspect;
@@ -42,6 +43,11 @@ public class RedisHelperConfiguration {
     @Bean
     public HiSpeedCacheAspect hiSpeedCacheAspect() {
         return new HiSpeedCacheAspect();
+    }
+
+    @Bean
+    public WithCacheDemoService withCacheDemoService() {
+        return new WithCacheDemoService();
     }
 
 }

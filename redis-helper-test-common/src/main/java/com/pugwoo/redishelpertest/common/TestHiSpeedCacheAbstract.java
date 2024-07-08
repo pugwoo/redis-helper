@@ -1,4 +1,4 @@
-package com.pugwoo.redishelpertest;
+package com.pugwoo.redishelpertest.common;
 
 import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
 import com.pugwoo.wooutils.cache.HiSpeedCacheContext;
