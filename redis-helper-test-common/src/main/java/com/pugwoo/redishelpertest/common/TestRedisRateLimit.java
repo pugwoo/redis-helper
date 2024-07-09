@@ -17,7 +17,7 @@ public abstract class TestRedisRateLimit {
 
     @Test
     public void testRateLimit() {
-        // 起10个线程，连续调用3分20秒，非收尾时间段肯定是完整的1分钟，此时调用成功的数量应该是20000个
+        // 起10个线程，连续调用3分20秒，非收尾时间段肯定是完整的1分钟，此时调用成功的数量应该是10000个
         long endTime = System.currentTimeMillis() + 3 * 60 * 1000 + 20 * 1000;
         List<Thread> threads = new ArrayList<>();
         Map<String, AtomicLong> timeCount = new HashMap<>();
@@ -68,7 +68,7 @@ public abstract class TestRedisRateLimit {
         ListUtils.sortAscNullLast(list, o -> (String) o.get("key"));
         boolean atLeastCheckOne = false;
         for (int i = 1; i < list.size() - 1; i++) {
-            assert list.get(i).get("value").toString().equals(String.valueOf(20000L));
+            assert list.get(i).get("value").toString().equals(String.valueOf(10000L));
             atLeastCheckOne = true;
         }
         assert atLeastCheckOne;

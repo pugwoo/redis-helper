@@ -12,7 +12,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.pugwoo</groupId>
-	<artifactId>redis-helper-test</artifactId>
+	<artifactId>redis-helper-test-with-springboot2</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>redis-helper-test</name>
 	<description>Demo project for Spring Boot</description>

@@ -5,7 +5,7 @@ import com.pugwoo.wooutils.redis.RedisLimitPeriodEnum;
 
 public class RateLimitService {
 
-    @RateLimit(limitPeriod = RedisLimitPeriodEnum.MINUTE, limitCount = 20000, waitMillisecond = 0)
+    @RateLimit(limitPeriod = RedisLimitPeriodEnum.MINUTE, limitCount = 10000, waitMillisecond = 0)
     public String limitPerMinute(String name) {
         return name;
     }
