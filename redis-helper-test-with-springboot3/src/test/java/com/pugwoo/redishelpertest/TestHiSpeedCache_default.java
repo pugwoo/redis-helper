@@ -1,6 +1,7 @@
 package com.pugwoo.redishelpertest;
 
 import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
+import com.pugwoo.redishelpertest.common.TestHiSpeedCacheAbstract;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
