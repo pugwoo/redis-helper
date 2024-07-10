@@ -1,4 +1,5 @@
 v1.5.1 - [modify] 分布式锁的锁信息由:lockInfo改成.lockInfo，不会影响分布式锁的功能
+       - [modify] 【重要升级提示】@RateLimit产生的key加上RLMT前缀，对于已用该注解的限频数据会失效，请评估失效影响
 
 2024年5月22日
 v1.5.0 - [fix] 【重要升级提示】Redis消息队列支持redis集群，原来当消息队列的3个key被分布到不同的slot时会导致消息队列失败
@@ -33,7 +34,7 @@ v1.3.1 - [add] 支持以注解@RateLimit的方式使用限频器
 
 2023年6月13日
 v1.3.0 - [add] 支持分布式锁选择是否可重入
-       - [enhance] 【升级提示】【重要】@Synchronized的throwExceptionIfNotGetLock值默认由false改为true，获取不到锁时将默认抛出异常
+       - [enhance] 【升级提示】@Synchronized的throwExceptionIfNotGetLock值默认由false改为true，获取不到锁时将默认抛出异常
                                       升级时请注意捕获并处理NotGetLockException异常
        - [enhance] HiSpeedCache的cacheNullValue属性默认由true改成false，默认不缓存null值，原因是认为null值很可能是异常值，不应该缓存
                    对于没有缓存null值所代理的可能的缓存击穿的问题，请自行判断后开启缓存null值来解决

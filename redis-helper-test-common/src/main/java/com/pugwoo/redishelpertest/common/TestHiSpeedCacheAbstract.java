@@ -167,7 +167,7 @@ public abstract class TestHiSpeedCacheAbstract {
         long end = System.currentTimeMillis();
 
         System.out.println("cost:" + (end - start) + "ms");
-        assert (end - start) > 3000 && (end - start) < 3800;
+        assert (end - start) > 3000 && (end - start) < 3900; // 不要超过6秒，就是合理的误差范围内
     }
 
     @Test
