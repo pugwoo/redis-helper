@@ -226,6 +226,11 @@ public class RedisMsgQueue {
             if(ackTimeoutSec != null) {
                 _redisMsg.setAckTimeout(ackTimeoutSec);
             }
+            if (_redisMsg.getConsumeCount() == null) {
+                _redisMsg.setConsumeCount(1);
+            } else {
+                _redisMsg.setConsumeCount(_redisMsg.getConsumeCount() + 1);
+            }
             JedisVersionCompatible.hset(jedis, mapKey, uuid, JsonRedisObjectConverter.toJson(_redisMsg));
 
             return _redisMsg;
