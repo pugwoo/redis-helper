@@ -209,7 +209,6 @@ public class RedisMsgQueue {
             String msgJson = jedis.hget(mapKey, uuid);
             if(msgJson == null || msgJson.isEmpty()) {
                 // 说明消息已经被消费了，清理掉uuid即可
-                //
                 long removedCount = jedis.lrem(doingKey, 0, uuid);
                 if (removedCount == 0) { // 如果doing列表里没有，一般是任务超时后被移回到listKey里了，此时再去listKey删除一遍
                     removedCount = jedis.lrem(listKey, 0, uuid); // 去掉移除listKey，当消息堆积时，该命令时间复杂度是O(N)，因此才放到if里
@@ -376,10 +375,11 @@ public class RedisMsgQueue {
         RedisMsg redisMsg = getMsg(redisHelper, topic, uuid);
         if (redisMsg == null) {
             redisHelper.execute(jedis -> jedis.lrem(doingKey, 0, uuid));
-            // 不要移除pendingKey中的uuid，当消息堆积时，时间复杂度是O(N)
+            // 不要移除pendingKey中的uuid，当消息堆积时，移除的时间复杂度是O(N)，堆积消息达到百万级别时，此命令会非常慢
             //redisHelper.execute(jedis -> jedis.eval(
             //        "redis.call('LREM', KEYS[1], 0, ARGV[1]); redis.call('LREM', KEYS[2], 0, ARGV[1]); ",
             //        ListUtils.newArrayList(doingKey, pendingKey), ListUtils.newArrayList(uuid)));
+            // 那么pendingKey中的消息会何时被移除呢？它会在被消费时，查到MSG没有消息体了，被删除，此时时间复杂度为O(1)
 
             return;
         }
@@ -389,7 +389,7 @@ public class RedisMsgQueue {
         redisHelper.execute(jedis -> {
             // 判断消息是否已经存在，可能已经被ack，不能再设置回去
             // 这里如果是先加后删，则比较大概率被等待receive的客户端拿到之后pop push回doing列表，此动作如果在删除之前进行，就会出现误删情况
-            // 如果是先删后加，理论上不会有问题，除了极端情况下，redis执行了第一条命令之后redis挂了才可能导致丢失数据，但这种可能性已经远远比第一种低
+            // 如果是先删后加，理论上不会有问题，除了极端情况下，redis执行了第一条命令之后redis挂了（还不是网络原因，而是redis断电）才可能导致丢失数据，但这种可能性已经远远比第一种低
             String mapKey = getMapKey(topic);
 
             List<String> keys = new ArrayList<>();
