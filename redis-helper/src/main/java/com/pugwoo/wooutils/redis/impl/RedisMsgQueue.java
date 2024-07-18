@@ -210,13 +210,11 @@ public class RedisMsgQueue {
             if(msgJson == null || msgJson.isEmpty()) {
                 // 说明消息已经被消费了，清理掉uuid即可
                 long removedCount = jedis.lrem(doingKey, 0, uuid);
-                if (removedCount == 0) { // 如果doing列表里没有，一般是任务超时后被移回到listKey里了，此时再去listKey删除一遍
-                    removedCount = jedis.lrem(listKey, 0, uuid); // 去掉移除listKey，当消息堆积时，该命令时间复杂度是O(N)，因此才放到if里
-                    if (removedCount == 0) {
-                        LOGGER.warn("get uuid:{} msg fail, msg is empty, remove uuid from both pending and doing list fail", uuid);
-                    }
+                if (removedCount > 0) {
+                    LOGGER.warn("get uuid:{} msg fail, msg is empty, this msg uuid has been removed.", uuid);
                 }
-                LOGGER.warn("get uuid:{} msg fail, msg is empty, this msg uuid will be removed.", uuid);
+                // 如果doing列表里没有，一般是任务超时后被移回到listKey里了，此时等待下一次消费在删除即可
+                // 不需要去pendingKey移除，因为当消息堆积时，删除pengdingKey的制定消息的时间复杂度是O(N)
                 return null;
             }
 
