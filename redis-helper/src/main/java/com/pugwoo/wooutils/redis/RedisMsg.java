@@ -20,6 +20,9 @@ public class RedisMsg {
     /**ack确认超时时间，秒*/
     private int ackTimeout;
 
+    /**消费次数*/
+    private Integer consumeCount;
+
     public String getUuid() {
         return uuid;
     }
@@ -58,5 +61,13 @@ public class RedisMsg {
 
     public void setAckTimeout(int ackTimeout) {
         this.ackTimeout = ackTimeout;
+    }
+
+    public Integer getConsumeCount() {
+        return consumeCount;
+    }
+
+    public void setConsumeCount(Integer consumeCount) {
+        this.consumeCount = consumeCount;
     }
 }

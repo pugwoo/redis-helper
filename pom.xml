@@ -9,9 +9,10 @@
 
 	<modules>
         <module>redis-helper</module>
-        <module>redis-helper-test</module>
 		<module>redis-helper-benchmark</module>
+		<module>redis-helper-test-with-springboot2</module>
 		<module>redis-helper-test-with-springboot3</module>
-	</modules>
+        <module>redis-helper-test-common</module>
+    </modules>
 
 </project>

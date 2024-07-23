@@ -99,6 +99,7 @@ public class RedisLimitAspect {
         if (namespace.trim().isEmpty()) {
             namespace = generateNamespace(targetMethod);
         }
+        namespace = "RLMT:" + namespace;
 
         limitParam.setNamespace(namespace);
         limitParam.setLimitCount(rateLimit.limitCount());
