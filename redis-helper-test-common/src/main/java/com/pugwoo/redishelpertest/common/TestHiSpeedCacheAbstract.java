@@ -2,6 +2,7 @@ package com.pugwoo.redishelpertest.common;
 
 import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
 import com.pugwoo.wooutils.cache.HiSpeedCacheContext;
+import com.pugwoo.wooutils.cache.HiSpeedCacheStatisticDTO;
 import com.pugwoo.wooutils.json.JSON;
 import org.junit.jupiter.api.Test;
 
@@ -195,6 +196,9 @@ public abstract class TestHiSpeedCacheAbstract {
         System.out.println("call count:" + getWithCacheDemoService().getSomethingWithCacheCount());
         assert qps > 100000;  // qps应该至少10万以上，正常都有100万
         assert getWithCacheDemoService().getSomethingWithCacheCount() <= ((int)cost/1000);
+
+        HiSpeedCacheStatisticDTO statistic = HiSpeedCacheContext.getStatistic();
+        assert statistic.getCacheDataCount() >= 1;
     }
 
     @Test

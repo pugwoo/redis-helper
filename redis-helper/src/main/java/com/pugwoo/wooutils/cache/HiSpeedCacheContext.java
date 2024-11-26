@@ -7,7 +7,7 @@ package com.pugwoo.wooutils.cache;
 public class HiSpeedCacheContext {
 
     /**
-     * 标识本次查询是否强制刷新缓存
+     * 标识本次查询是否强制刷新缓存，如果为true，则不走缓存，即使调用失败也不走缓存。
      */
     private static final ThreadLocal<Boolean> forceRefreshOnce = new ThreadLocal<>();
 
@@ -20,6 +20,19 @@ public class HiSpeedCacheContext {
      * 停止本次查询的缓存，即不走缓存，也不更新缓存
      */
     private static final ThreadLocal<Boolean> disableOnce = new ThreadLocal<>();
+
+    /**
+     * 当前高速缓存的切面对象
+     */
+    private static final ThreadLocal<HiSpeedCacheAspect> hiSpeedCacheAspect = new ThreadLocal<>();
+
+    /**
+     * 查询当前缓存的统计信息
+     */
+    public static HiSpeedCacheStatisticDTO getStatistic() {
+        HiSpeedCacheAspect aspect = hiSpeedCacheAspect.get();
+        return aspect == null ? HiSpeedCacheStatisticDTO.defaultValue() : aspect.getStatistic();
+    }
 
     /**
      * 尝试强制刷新缓存，如果刷新失败则走原来缓存，如果刷新成功则更新缓存。这个设置只生效一次。
@@ -71,6 +84,10 @@ public class HiSpeedCacheContext {
         } else {
             return false;
         }
+    }
+
+    protected static void setHiSpeedCacheAspect(HiSpeedCacheAspect hiSpeedCacheAspect) {
+        HiSpeedCacheContext.hiSpeedCacheAspect.set(hiSpeedCacheAspect);
     }
 
 }

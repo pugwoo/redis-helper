@@ -125,6 +125,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     @Around("@annotation(com.pugwoo.wooutils.cache.HiSpeedCache) execution(* *.*(..))")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
+        HiSpeedCacheContext.setHiSpeedCacheAspect(this);
+
         boolean disable = HiSpeedCacheContext.getDisable();
         if (disable) {
             return pjp.proceed();
@@ -270,6 +272,15 @@ public class HiSpeedCacheAspect implements InitializingBean {
         } else {
             return processClone(hiSpeedCache, ret, type);
         }
+    }
+
+    /**
+     * 获取高速缓存的运行统计信息
+     */
+    public HiSpeedCacheStatisticDTO getStatistic() {
+        HiSpeedCacheStatisticDTO statisticDTO = new HiSpeedCacheStatisticDTO();
+        statisticDTO.setCacheDataCount(dataMap.size());
+        return statisticDTO;
     }
 
     /**启用清理线程和更新线程*/
@@ -637,7 +648,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 }
                 try {
                     Thread.sleep(1000);
-                } catch (InterruptedException e) { // ignore
+                } catch (InterruptedException ignored) {
                 }
             }
         }
@@ -654,7 +665,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 }
                 try {
                     Thread.sleep(100);
-                } catch (InterruptedException e) { // ignore
+                } catch (InterruptedException ignored) {
                 }
             }
         }
