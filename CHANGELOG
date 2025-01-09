@@ -1,3 +1,5 @@
+v1.5.3 - [enhance] 移除RedisHelper的getObject(String key, Class<T> clazz, TypeReference<T> typeReference)的第二个参数
+
 2024年11月26日
 v1.5.2 - [add] HiSpeedCache支持查询当前缓存的统计信息
 
