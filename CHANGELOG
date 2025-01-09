@@ -1,3 +1,4 @@
+2025年1月9日
 v1.5.3 - [enhance] 移除RedisHelper的getObject(String key, Class<T> clazz, TypeReference<T> typeReference)的第二个参数
 
 2024年11月26日

@@ -6,7 +6,7 @@
 	<groupId>com.pugwoo</groupId>
 	<artifactId>redis-helper</artifactId>
 	<packaging>jar</packaging>
-	<version>1.5.2</version>
+	<version>1.5.3</version>
 
 	<name>redis-helper</name>
 	<description>a useful redis client with interesting feature</description>
@@ -51,12 +51,12 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.18.1</version>
+            <version>2.18.2</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
-            <version>2.18.1</version>
+            <version>2.18.2</version>
         </dependency>
 
         <!-- 脚本动态相关功能 -->
