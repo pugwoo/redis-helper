@@ -88,17 +88,17 @@ public class JsonRedisObjectConverter implements IRedisObjectConverter {
 	}
 
 	@Override
-	public <T> T convertToObject(String str, Class<T> clazz, TypeReference<T> typeReference) {
-		return parse(str, clazz, typeReference);
+	public <T> T convertToObject(String str, TypeReference<T> typeReference) {
+		return parse(str, typeReference);
 	}
 
-	public static <T> T parse(String str, Class<T> clazz, TypeReference<T> typeReference) {
+	public static <T> T parse(String str, TypeReference<T> typeReference) {
 		if (str == null || str.isEmpty()) { // 这里不要str.trim()，也就是空白的字符串可能是有用的字符串
 			return null;
 		}
 		try {
 			if (typeReference == null) {
-				return mapper.readValue(str, clazz);
+				throw new RuntimeException("typeReference is null");
 			} else {
 				return mapper.readValue(str, typeReference);
 			}

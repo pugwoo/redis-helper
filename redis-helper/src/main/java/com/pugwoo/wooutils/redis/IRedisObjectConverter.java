@@ -29,8 +29,7 @@ public interface IRedisObjectConverter {
 	 * 将字符串转换成对象，【注意】需要自行处理str为null值的情况
 	 *
 	 * @param str json字符串
-	 * @param clazz 转换成的类
 	 * @param typeReference 泛型描述信息
 	 */
-	<T> T convertToObject(String str, Class<T> clazz, TypeReference<T> typeReference);
+	<T> T convertToObject(String str, TypeReference<T> typeReference);
 }
