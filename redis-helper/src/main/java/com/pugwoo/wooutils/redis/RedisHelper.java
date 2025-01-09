@@ -109,9 +109,9 @@ public interface RedisHelper {
 	<T> T getObject(String key, Class<T> clazz);
 
 	/**
-	 * 获取对象，需要提供IRedisObjectConverter的实现对象【不支持嵌套泛型，例如List<List<Integer>>，即泛型里面还有泛型】
+	 * 获取对象，需要提供IRedisObjectConverter的实现对象【不支持嵌套泛型，例如{@code List<List<Integer>>}，即泛型里面还有泛型】
 	 * <br>
-	 * 特别说明，该方法的泛型写法主要用于便捷实用，使用泛型时会有type uncheck warning，介意请用 getObject(String key, TypeReference<T> typeReference)
+	 * 特别说明，该方法的泛型写法主要用于便捷实用，使用泛型时会有type uncheck warning，介意请用 {@code getObject(String key, TypeReference<T> typeReference)}
 	 *
 	 * @param key redis key
 	 * @param genericClasses 支持泛型类，但不支持嵌套泛型，嵌套泛型请使用getObject传入TypeReference的方式
