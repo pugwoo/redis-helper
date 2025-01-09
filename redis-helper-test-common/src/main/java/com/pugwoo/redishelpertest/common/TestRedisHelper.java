@@ -1,6 +1,8 @@
 package com.pugwoo.redishelpertest.common;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.pugwoo.redishelpertest.redis.Student;
+import com.pugwoo.wooutils.collect.ListUtils;
 import com.pugwoo.wooutils.lang.EqualUtils;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import org.junit.jupiter.api.Test;
@@ -81,12 +83,29 @@ public abstract class TestRedisHelper {
 
         assert new EqualUtils().isEqual(list, list2);
 
+        list2 = getRedisHelper().getObject("just-test111", new TypeReference<List<Student>>() {
+        });
+        assert new EqualUtils().isEqual(list, list2);
+
+        List<List<Student>> list2s = getRedisHelper().getObjects(ListUtils.of("just-test111"),
+                new TypeReference<List<Student>>() {
+                });
+        assert new EqualUtils().isEqual(list, list2s.get(0));
+
         Map<Integer, Student> map = new HashMap<>();
         map.put(1, student);
         getRedisHelper().setObject("just-test333", 10, map);
         Map<Integer, Student> map2 = getRedisHelper().getObject("just-test333", Map.class, Integer.class, Student.class);
 
         assert new EqualUtils().isEqual(map, map2);
+
+        map2 = getRedisHelper().getObject("just-test333", new TypeReference<Map<Integer, Student>>() {
+        });
+        assert new EqualUtils().isEqual(map, map2);
+
+        List<Map<Integer, Student>> map2s = getRedisHelper().getObjects(ListUtils.of("just-test333"), new TypeReference<Map<Integer, Student>>() {
+        });
+        assert new EqualUtils().isEqual(map, map2s.get(0));
 
     }
 
