@@ -58,6 +58,21 @@ public class InnerCommonUtils {
         return !isBlank(str);
     }
 
+    public static Long parseLong(Object obj) {
+        if(obj == null) {
+            return null;
+        }
+        if(obj instanceof Long) {
+            return (Long) obj;
+        }
+        try {
+            return Long.valueOf(obj.toString().trim().replaceAll(",", ""));
+        } catch (Exception e) {
+            LOGGER.error("parseLong fail, obj:{}", obj, e);
+            return null;
+        }
+    }
+
     /**
      * 获得本机的ipv4的所有ip列表，排除本机ip 127.开头的
      */
