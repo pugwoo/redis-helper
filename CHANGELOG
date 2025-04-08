@@ -1,4 +1,4 @@
-
+2025年4月8日
 v1.5.4 - [enhance] 增加HiSpeedCache健壮性，当redis故障时，可自动降级为内存缓存和业务调用；
                    当业务故障时，自动降级为redis过期缓存
        - [enhance] RedisHelper.requireLock方法在redis故障时抛出异常，代替原来的返回null值
