@@ -1,5 +1,8 @@
 
-v1.5.4 - [enhance] 增加hispeedcache健壮性，当redis故障时，可自动降级为内存缓存和业务调用；当业务故障时，自动降级为redis过期缓存
+v1.5.4 - [enhance] 增加HiSpeedCache健壮性，当redis故障时，可自动降级为内存缓存和业务调用；
+                   当业务故障时，自动降级为redis过期缓存
+       - [enhance] RedisHelper.requireLock方法在redis故障时抛出异常，代替原来的返回null值
+       - [add] @Synchronized 增加passThroughWhenRedisDown，默认值false，允许设置在redis宕机时跳过分布式锁
 
 2025年1月9日
 v1.5.3 - [enhance] 移除RedisHelper的getObject(String key, Class<T> clazz, TypeReference<T> typeReference)的第二个参数

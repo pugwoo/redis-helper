@@ -55,6 +55,11 @@ public class RedisSyncParam {
      */
     protected boolean isReentrantLock = true;
 
+    /**
+     * @see Synchronized#passThroughWhenRedisDown()
+     */
+    protected boolean passThroughWhenRedisDown = false;
+
     // #########################
 
     /**
