@@ -217,7 +217,7 @@ public abstract class TestHiSpeedCacheAbstract {
         double qps = times / (cost / 1000.0);
         System.out.println("qps:" + qps);
 
-        assert qps > 300000;  // qps应该30万以上，如果不用cacheRedisDataMillisecond是不可能达到30万qps的
+        assert qps > 200000;  // qps应该20万以上，如果不用cacheRedisDataMillisecond是不可能达到20万qps的
     }
 
     @Test

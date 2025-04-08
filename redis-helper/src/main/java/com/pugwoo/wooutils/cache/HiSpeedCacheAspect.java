@@ -357,7 +357,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
     }
 
     private String getCacheConfigKey(String cacheKey) {
-        return "HSCF:" + cacheKey.substring(4);
+        return "HSCA:" + cacheKey.substring(4);
     }
 
     private String generateKey(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache) {
