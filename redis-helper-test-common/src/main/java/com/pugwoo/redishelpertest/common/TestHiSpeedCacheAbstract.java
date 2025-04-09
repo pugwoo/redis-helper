@@ -88,9 +88,9 @@ public abstract class TestHiSpeedCacheAbstract {
         // String getSomethingWithCache is executed @ 2021-07-25 01:04:37  第四次fetch
         // String getSomethingWithCache is start    @ 2021-07-25 01:04:38
         // String getSomethingWithCache is executed @ 2021-07-25 01:04:41  第五次fetch
-        System.out.println("testWithCache2 count:" + getWithCacheDemoService().getSomethingWithCacheCount());
-        assert getWithCacheDemoService().getSomethingWithCacheCount() >= 6
-                && getWithCacheDemoService().getSomethingWithCacheCount() <= 8;
+        int count = getWithCacheDemoService().getSomethingWithCacheCount();
+        System.out.println("testWithCache2 count:" + count);
+        assert (count >= 6 && count <= 8);
     }
     
     /** 不缓存null值 */
