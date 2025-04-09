@@ -85,4 +85,11 @@ public @interface Synchronized {
 	 */
 	String customExceptionMessage() default "";
 
+	/**
+	 * 当redis不可用时，是否通过，默认false，即不通过。
+	 * 请评估业务对分布式锁的重要性来决定是否通过。
+	 * 如果设置为true，分布式锁将在尝试加锁等待期间，redis全部请求都down掉的情况下，允许通过。
+	 */
+	boolean passThroughWhenRedisDown() default false;
+
 }

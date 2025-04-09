@@ -101,7 +101,12 @@ public class RedisSyncAspect implements InitializingBean {
 
         // not get redis lock
         if (!redisSyncRet.successGetLock) {
-            return null;
+            // if redis down and allow pass
+            if (param.passThroughWhenRedisDown && redisSyncRet.isRedisDown) {
+                LOGGER.warn("redis is down and synchronized allow pass through when redis down, namespace:{} key:{}, so pass it", param.namespace, param.key);
+            } else {
+                return null;
+            }
         }
 
         // if all redis lock got, then process method, otherwise get next redis lock
@@ -113,7 +118,9 @@ public class RedisSyncAspect implements InitializingBean {
             }
             return proceed(params, i + 1, startTime);
         } finally {
-            releaseLock(param, redisSyncRet);
+            if (!(param.passThroughWhenRedisDown && redisSyncRet.isRedisDown)) {
+                releaseLock(param, redisSyncRet);
+            }
         }
     }
 
@@ -155,6 +162,7 @@ public class RedisSyncAspect implements InitializingBean {
     }
 
     private RedisSyncRet tryGetLockWithRabbitSeries(RedisSyncParam p) throws Throwable {
+        boolean isRedisDown = true;
 
         // 构造兔子数列
         int a = 0, b = 1;
@@ -163,15 +171,21 @@ public class RedisSyncAspect implements InitializingBean {
         for (int i = 1; true; i++) {
 
             long lockStart = System.currentTimeMillis();
-            String lockUuid = redisHelper.requireLock(p.namespace, p.key, tmpExpireSecond, p.isReentrantLock);
+            String lockUuid = null;
+
+            try {
+                lockUuid = redisHelper.requireLock(p.namespace, p.key, tmpExpireSecond, p.isReentrantLock);
+                isRedisDown = false;
+            } catch (Throwable e) {
+                LOGGER.error("get lock error, namespace:{}, key:{}", p.namespace, p.key, e);
+            }
 
             if (lockUuid != null) {
-
                 // 获取到了锁，到这里之前发生了 GC或者获取锁的时候网络TTL大，导致锁过期了，则进行解锁并等待下一轮获取
                 if (System.currentTimeMillis() - lockStart > tmpExpireSecond * 1000L) {
                     boolean result = redisHelper.releaseLock(p.namespace, p.key, lockUuid, p.isReentrantLock);
                     logReleaseLock(p, lockUuid, result);
-                    return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i);
+                    return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i, isRedisDown);
                 }
 
                 logSuccessGetLock(p, lockUuid);
@@ -181,7 +195,7 @@ public class RedisSyncAspect implements InitializingBean {
                     uuid = putToHeatBeat(p, lockUuid);
                 }
 
-                return RedisSyncRet.successGetLock(uuid, lockUuid, System.currentTimeMillis() - start, i);
+                return RedisSyncRet.successGetLock(uuid, lockUuid, System.currentTimeMillis() - start, i, isRedisDown);
             }
 
             if (p.logDebug) {
@@ -196,7 +210,7 @@ public class RedisSyncAspect implements InitializingBean {
                             Thread.currentThread().getName());
                 }
                 mayThrowExceptionIfNotGetLock(p.sync, p.targetMethod, p.namespace, p.key);
-                return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i);
+                return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i, isRedisDown);
             }
 
             long totalWait = System.currentTimeMillis() - start;
@@ -207,7 +221,7 @@ public class RedisSyncAspect implements InitializingBean {
                             p.namespace, p.key, totalWait, Thread.currentThread().getName());
                 }
                 mayThrowExceptionIfNotGetLock(p.sync, p.targetMethod, p.namespace, p.key);
-                return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i);
+                return RedisSyncRet.notSuccessGetLock(System.currentTimeMillis() - start, i, isRedisDown);
             }
             if (p.waitLockMillisecond - totalWait < b) {
                 try {
@@ -327,6 +341,7 @@ public class RedisSyncAspect implements InitializingBean {
         redisSyncParam.logDebug = sync.logDebug();
         redisSyncParam.throwExceptionIfNotGetLock = sync.throwExceptionIfNotGetLock();
         redisSyncParam.isReentrantLock = sync.isReentrantLock();
+        redisSyncParam.passThroughWhenRedisDown = sync.passThroughWhenRedisDown();
         return redisSyncParam;
     }
 

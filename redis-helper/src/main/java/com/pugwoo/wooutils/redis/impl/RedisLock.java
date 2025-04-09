@@ -68,7 +68,7 @@ public class RedisLock {
 			}
 		}
 
-		try {
+		//try {
             String uuid = UUID.randomUUID().toString();
             boolean result = redisHelper.setStringIfNotExist(newKey, maxTransactionSeconds, uuid);
 			if (result) {
@@ -81,16 +81,16 @@ public class RedisLock {
 			} else {
 				return null;
 			}
-        } catch (Exception e) {
+        //} catch (Exception e) {
             // 这里可能有一种极端情况， redis 网络返回超时了，实际上redis的锁获取成功了
 			// 这种情况暂不进行处理，等待锁超时，原因：
 			// 1）低概率事情
 			// 2）网络异常情况下，uuid实际上拿不到，也无法解锁
 			// 3）此时网络情况可能较差，去解锁也不一定成功
 			// 4）redis会超时解锁，系统会自动恢复，目前超时是30秒，可以接受
-            LOGGER.error("requireLock error, namespace:{}, key:{}", namespace, key, e);
-            return null;
-        }
+        //    LOGGER.error("requireLock error, namespace:{}, key:{}", namespace, key, e);
+        //   return null;
+        //}
     }
 
 	/**

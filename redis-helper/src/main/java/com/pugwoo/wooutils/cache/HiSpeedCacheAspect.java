@@ -1,5 +1,6 @@
 package com.pugwoo.wooutils.cache;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.impl.JsonRedisObjectConverter;
 import com.pugwoo.wooutils.utils.ClassUtils;
@@ -176,18 +177,16 @@ public class HiSpeedCacheAspect implements InitializingBean {
         if (tryForceRefresh) {
             try {
                 ret = pjp.proceed();
-                if (ret == null) {
-                    if (cacheNullValue) { // 标记缓存null值，说明null是有意义的，可以认为调用成功
-                        isTryForceRefreshSuccess = true;
-                    }
-                } else {
-                    isTryForceRefreshSuccess = true;
-                }
+                isTryForceRefreshSuccess = ret != null || cacheNullValue; // 标记缓存null值，说明null是有意义的，可以认为调用成功
             } catch (Throwable e) {
                 LOGGER.error("tryForceRefresh fail, key:{}, args:{}, method:{} HiSpeedCache will use cache.",
                         cacheKey, JsonRedisObjectConverter.toJson(pjp.getArgs()), targetMethod, e);
             }
         }
+
+        // 这两个变量用于存放redis中缓存的且已经过期的数据，如果本地调用失败，可以降级为redis中缓存的数据
+        boolean isRedisHaveData = false;
+        Object redisCachedValue = null;
 
         if (!forceRefresh && !isTryForceRefreshSuccess) { // 非强制刷新，才走缓存逻辑
             // 查看数据是否有命中，有则直接返回
@@ -200,26 +199,50 @@ public class HiSpeedCacheAspect implements InitializingBean {
                     }
                 }
 
-                String value = redisHelper.getString(cacheKey);
-                if(value != null) { // == null则缓存没命中，应该走下面调用逻辑
-                    Object result = NULL_VALUE.equals(value) ? null : parseJson(value, targetMethod, type);
-                    if (cacheRedisData) { // 缓存到本地
-                        putCacheData(cacheKey, result == null ? NULL_VALUE : result,
-                                cacheRedisDataMillisecond + System.currentTimeMillis());
+                RedisCacheDTO redisCache = getRedisCache(cacheKey);
+                if (redisCache.isRedisOk()) {
+                    String value = redisCache.getValue();
+                    if(value != null) { // == null则缓存没命中，应该走下面调用逻辑
+                        Object result = NULL_VALUE.equals(value) ? null : parseJson(value, targetMethod, type);
+
+                        // redis放的是有效数据
+                        if (redisCache.getExpireTimestamp() == null || redisCache.getExpireTimestamp() > System.currentTimeMillis()) {
+                            if (cacheRedisData) { // 缓存到本地
+                                putCacheData(cacheKey, result == null ? NULL_VALUE : result,
+                                        cacheRedisDataMillisecond + System.currentTimeMillis());
+                            }
+                            return processClone(hiSpeedCache, result, type);
+                        } // else 走直接调用
+                        isRedisHaveData = true;
+                        redisCachedValue = result;
                     }
-                    return result; // 因为这个值是新构造的，也没有缓存，所以不需要processClone
+                } else { // redis有故障，尝试本地缓存
+                    Object cacheData = getCacheData(cacheKey);
+                    if (cacheData != null) {
+                        return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, type);
+                    } // else 走直接调用
                 }
             } else {
                 Object cacheData = getCacheData(cacheKey);
                 if (cacheData != null) {
                     return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, type);
-                }
+                } // else 走直接调用
             }
         }
 
         // 强制刷新或缓存没有命中时，走下面的逻辑
         if (!isTryForceRefreshSuccess) {
-            ret = pjp.proceed();
+            // 没有强制刷新的情况下，如果调用业务逻辑异常，同时还有redis过期缓存时，那么fallback为redis的缓存
+            if (!forceRefresh && isRedisHaveData) {
+                try {
+                    ret = pjp.proceed();
+                } catch (Throwable e) {
+                    LOGGER.error("call biz method fail, fallback to redis cache, key:{}", cacheKey, e);
+                    return redisCachedValue; // 一次性使用，也不会将这个值重新刷到缓存中，这里不需要processClone
+                }
+            } else {
+                ret = pjp.proceed();
+            }
         }
 
         boolean continueFetch = hiSpeedCache.continueFetchSecond() > 0;
@@ -235,16 +258,23 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
             if(useRedis) {
                 if(ret != null) {
-                    // redis的缓存设置为超时时间的2倍，这里不应该使用continueFetchSecond，原因是如果所有的java应用重启，此时刷新任务是终止的
-                    // 如果redis的缓存时间很长，那么数据将长期不会被更新
-                    redisHelper.setObject(cacheKey, hiSpeedCache.expireSecond() * 2, ret);
-                    if (cacheRedisData) {
-                        putCacheData(cacheKey, ret, cacheRedisDataMillisecond + System.currentTimeMillis());
+                    boolean setRedisSuccess = setRedisCache(cacheKey, ret, hiSpeedCache.expireSecond(), hiSpeedCache.continueFetchSecond());
+                    if (setRedisSuccess) {
+                        if (cacheRedisData) {
+                            putCacheData(cacheKey, ret, cacheRedisDataMillisecond + System.currentTimeMillis());
+                        }
+                    } else { // 当redis发生故障时，降级为内存缓存
+                        putCacheData(cacheKey, ret, expireTime);
                     }
                 } else if (cacheNullValue) {
-                    redisHelper.setString(cacheKey, hiSpeedCache.expireSecond() * 2, NULL_VALUE); // 缓存null值
-                    if (cacheRedisData) {
-                        putCacheData(cacheKey, NULL_VALUE, cacheRedisDataMillisecond + System.currentTimeMillis());
+                    boolean setRedisSuccess = setRedisCache(cacheKey, NULL_VALUE,
+                            hiSpeedCache.expireSecond(), hiSpeedCache.continueFetchSecond()); // 缓存null值
+                    if (setRedisSuccess) {
+                        if (cacheRedisData) {
+                            putCacheData(cacheKey, NULL_VALUE, cacheRedisDataMillisecond + System.currentTimeMillis());
+                        }
+                    } else { // 当redis发生故障时，降级为内存缓存
+                        putCacheData(cacheKey, NULL_VALUE, expireTime);
                     }
                 }
             } else {
@@ -324,6 +354,10 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private String generateCacheKey(Method targetMethod, String key) {
         String methodSignatureWithClassName = ClassUtils.getMethodSignatureWithClassName(targetMethod);
         return "HSC:" + methodSignatureWithClassName + (key.isEmpty() ? "" : ":" + key);
+    }
+
+    private String getCacheConfigKey(String cacheKey) {
+        return "HSCA:" + cacheKey.substring(4);
     }
 
     private String generateKey(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache) {
@@ -591,13 +625,9 @@ public class HiSpeedCacheAspect implements InitializingBean {
                                     }
                                     
                                     if(continueFetchDTO.hiSpeedCache.useRedis()) {
-                                        int expireSecond = Math.max(continueFetchDTO.hiSpeedCache.expireSecond(),
-                                                continueFetchDTO.hiSpeedCache.continueFetchSecond());
-                                        if(result != null) {
-                                            redisHelper.setObject(cacheKey, continueFetchDTO.hiSpeedCache.expireSecond() * 2 , result);
-                                        } else {
-                                            redisHelper.setString(cacheKey, continueFetchDTO.hiSpeedCache.expireSecond() * 2, NULL_VALUE);
-                                        }
+                                        setRedisCache(cacheKey, result != null ? result : NULL_VALUE,
+                                                continueFetchDTO.hiSpeedCache.expireSecond(), continueFetchDTO.hiSpeedCache.continueFetchSecond());
+                                        // 特别说明：定时任务中的redis故障，不自动降级为内存缓存，等待重试
                                     } else {
                                         if(result != null) {
                                             dataMap.put(cacheKey, result);
@@ -686,6 +716,91 @@ public class HiSpeedCacheAspect implements InitializingBean {
             return new Thread(r, threadNamePrefix + "-" + count.getAndIncrement());
         }
 
+    }
+
+    // 即便使用了redis，高速缓存仍设计为对redis弱依赖，当redis故障时，直接走方法调用，并自动降级为内存缓存
+
+    /**
+     * 保存redis缓存数据结果
+     */
+    private static class RedisCacheDTO {
+
+        private String value;
+
+        /**缓存数据的过期时间*/
+        private Long expireTimestamp;
+
+        private boolean isRedisOk;
+
+        public String getValue() {
+            return value;
+        }
+
+        public void setValue(String value) {
+            this.value = value;
+        }
+
+        public boolean isRedisOk() {
+            return isRedisOk;
+        }
+
+        public void setRedisOk(boolean redisOk) {
+            isRedisOk = redisOk;
+        }
+
+        public Long getExpireTimestamp() {
+            return expireTimestamp;
+        }
+
+        public void setExpireTimestamp(Long expireTimestamp) {
+            this.expireTimestamp = expireTimestamp;
+        }
+    }
+
+    private RedisCacheDTO getRedisCache(String cacheKey) {
+        RedisCacheDTO result = new RedisCacheDTO();
+        result.setRedisOk(true);
+        try {
+            String cacheConfigKey = getCacheConfigKey(cacheKey);
+            List<String> keys = new ArrayList<>();
+            keys.add(cacheKey);
+            keys.add(cacheConfigKey);
+            List<String> values = redisHelper.getStrings(keys);
+            if (values != null && !values.isEmpty() && values.get(0) != null) {
+                result.setValue(values.get(0));
+                // 尝试获得cacheKey过期时间
+                if (values.size() > 1 && InnerCommonUtils.isNotBlank(values.get(1))) {
+                    Map<String, Object> config = JsonRedisObjectConverter.parse(values.get(1), new TypeReference<Map<String, Object>>() {
+                    });
+                    Object et = config.get("et");
+                    if (et != null) {
+                        result.setExpireTimestamp(InnerCommonUtils.parseLong(et));
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            LOGGER.error("redis getString error, key:{}", cacheKey, e);
+            result.setRedisOk(false);
+        }
+        return result;
+    }
+
+    private boolean setRedisCache(String cacheKey, Object value, int expireSecond, int continueFetchSecond) {
+        String cacheConfigKey = getCacheConfigKey(cacheKey);
+        try {
+            Map<String, Object> config = new HashMap<>();
+            config.put("et", System.currentTimeMillis() + expireSecond * 1000L);
+            redisHelper.setObject(cacheConfigKey, continueFetchSecond, config);
+
+            if (NULL_VALUE.equals(value)) {
+                return redisHelper.setString(cacheKey, continueFetchSecond, NULL_VALUE);
+            } else {
+                return redisHelper.setObject(cacheKey, continueFetchSecond, value);
+            }
+        } catch (Throwable e) {
+            LOGGER.error("redis set error, key:{}", cacheKey, e);
+            return false;
+        }
     }
 
 }

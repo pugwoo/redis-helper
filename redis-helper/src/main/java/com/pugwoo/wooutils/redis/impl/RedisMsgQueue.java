@@ -495,11 +495,16 @@ public class RedisMsgQueue {
         /** 一直尝试拿锁，直到拿到为止 */
         private String getLock() {
             while(true) {
-                String lockUuid = redisHelper.requireLock(LOCK_KEY, "-", 30, true);
-                if(lockUuid == null) { // 没有拿到锁，等待30秒重试
+                try {
+                    String lockUuid = redisHelper.requireLock(LOCK_KEY, "-", 30, true);
+                    if(lockUuid == null) { // 没有拿到锁，等待30秒重试
+                        doSleep(30000);
+                    } else {
+                        return lockUuid;
+                    }
+                } catch (Throwable e) {
+                    LOGGER.error("get lock error, namespace:{} key:-", LOCK_KEY, e);
                     doSleep(30000);
-                } else {
-                    return lockUuid;
                 }
             }
         }
