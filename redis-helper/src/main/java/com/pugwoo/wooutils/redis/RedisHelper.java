@@ -286,7 +286,7 @@ public interface RedisHelper {
 	/////////////////// Redis 带 ACK 机制的消息队列 ///////////////////////////////
 
 	/**
-	 * 发送消息，返回消息的uuid。默认的超时时间是86400秒
+	 * 发送消息，返回消息的uuid。默认的超时时间是3600秒
 	 * @param topic topic将是redis的key
 	 * @param msg
 	 * @return
@@ -303,7 +303,7 @@ public interface RedisHelper {
 	String send(String topic, String msg, int defaultAckTimeoutSec);
 	
 	/**
-	 * 批量发送消息，返回消息的uuid。默认的超时时间是86400秒
+	 * 批量发送消息，返回消息的uuid。默认的超时时间是3600秒
 	 * @param topic topic将是redis的key
 	 * @param msgList 消息列表
 	 * @return 消息的uuidList，发送失败返回null
