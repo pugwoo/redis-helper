@@ -7,8 +7,11 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.params.SetParams;
 
+import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -18,36 +21,47 @@ public class JedisVersionCompatible {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(JedisVersionCompatible.class);
 
+    private static final int jedisVersion = getJedisVersion();
+
+    /**
+     * 通过pom.properties文件的方式查询jedis的版本
+     * @return 返回0表示未知
+     */
+    private static int getJedisVersion() {
+        String resource = "META-INF/maven/redis.clients/jedis/pom.properties";
+        try (InputStream in = Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
+            if (in != null) {
+                Properties p = new Properties();
+                p.load(in);
+                String version = p.getProperty("version");
+                if (version == null) {
+                    return 0;
+                }
+                int index = version.indexOf(".");
+                if (index <= 0) {
+                    return 0;
+                }
+                return Integer.parseInt(version.substring(0, index));
+            }
+        } catch (Throwable ignored) {
+        }
+        return 0;
+    }
+
     // 标识现在运行的程序用的是哪个jedis版本, 2.x == 2, 3.x == 3, 4.x = 4
+    @Deprecated
     private static final AtomicInteger jedisVer = new AtomicInteger(0);
 
     // START of setStringIfNotExist
 
     public static boolean setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
         try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 3) {
-                return v3_setStringIfNotExist(jedis, key, expireSecond, value);
-            } else if (_jedisVer == 4) {
-                return v4_setStringIfNotExist(jedis, key, expireSecond, value);
-            } else if (_jedisVer == 2) {
+            if (jedisVersion == 2) {
                 return v2_setStringIfNotExist(jedis, key, expireSecond, value);
+            } else if (jedisVersion >= 3 && jedisVersion <= 5) {
+                return v3v4v5_setStringIfNotExist(jedis, key, expireSecond, value);
             } else {
-                try {
-                    boolean result = v3_setStringIfNotExist(jedis, key, expireSecond, value);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    try {
-                        boolean result = v4_setStringIfNotExist(jedis, key, expireSecond, value);
-                        jedisVer.set(4);
-                        return result;
-                    } catch (NoSuchMethodError | NoClassDefFoundError e2) {
-                        boolean result = v2_setStringIfNotExist(jedis, key, expireSecond, value);
-                        jedisVer.set(2);
-                        return result;
-                    }
-                }
+                return v6_setStringIfNotExist(jedis, key, expireSecond, value);
             }
         } catch (Exception e) {
             LOGGER.error("operate jedis error, key:{}, value:{}", key, value, e);
@@ -66,78 +80,102 @@ public class JedisVersionCompatible {
         params.put("jedis", jedis);
 
         Object result = MVEL.executeExpression(compiledSetStringIfNotExist, params); // 该方式对性能几乎没有影响
-        return result != null;
+        return result != null && "OK".equals(result.toString());
     }
 
-    private static boolean v3_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
+    // 在静态块中只查一次 Method
+    private static final Method SET_PARAMS_EX_LONG;
+    private static final Method SET_PARAMS_EX_INT;
+
+    static {
+        Method m = null;
+        try {
+            m = SetParams.class.getMethod("ex", long.class);
+        } catch (Throwable ignored) {}
+        SET_PARAMS_EX_LONG = m;
+
+        try {
+            m = SetParams.class.getMethod("ex", int.class);
+        } catch (Throwable ignored) {}
+        SET_PARAMS_EX_INT = m;
+    }
+
+    private static boolean v3v4v5_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
+        SetParams setParams = new SetParams();
+        setParams.nx();
+
+        try {
+            if (SET_PARAMS_EX_LONG != null) {
+                SET_PARAMS_EX_LONG.invoke(setParams, (long) expireSecond);
+            } else if (SET_PARAMS_EX_INT != null) {
+                SET_PARAMS_EX_INT.invoke(setParams, expireSecond);
+            } else {
+                throw new RuntimeException("SetParams.ex() not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        String result = jedis.set(key, value, setParams);
+        return "OK".equals(result);
+    }
+
+    private static boolean v6_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
         SetParams setParams = new SetParams();
         setParams.nx();
         setParams.ex(expireSecond);
         String result = jedis.set(key, value, setParams);
-        return result != null;
+        return "OK".equals(result);
     }
 
-    private static final ExecutableAccessor getCompiledSetStringIfNotExistParamsEx = (ExecutableAccessor) MVEL.compileExpression(
-            "setParams.ex(expireSecond)");
-
-    private static boolean v4_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
-        SetParams setParams = new SetParams();
-        setParams.nx();
-
-        Map<String, Object> params = new HashMap<>();
-        params.put("setParams", setParams);
-        params.put("expireSecond", (long) expireSecond);
-        MVEL.executeExpression(getCompiledSetStringIfNotExistParamsEx, params);
-
-        String result = jedis.set(key, value, setParams);
-        return result != null;
-    }
 
     // END of setStringIfNotExist
 
     // START of setString
 
     public static boolean setString(Jedis jedis, String key, int expireSecond, String value) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_setString(jedis, key, expireSecond, value);
-            } else if (_jedisVer ==2 || _jedisVer == 3) {
-                return v3_setString(jedis, key, expireSecond, value);
-            } else {
-                try {
-                    boolean result = v3_setString(jedis, key, expireSecond, value);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    boolean result = v4_setString(jedis, key, expireSecond, value);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("setString operate jedis error, key:{}, value:{}", key, value, e);
-            return false;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_setString(jedis, key, expireSecond, value);
+        } else {
+            return v4v5v6_setString(jedis, key, expireSecond, value);
         }
     }
 
-    private static boolean v3_setString(Jedis jedis, String key, int expireSecond, String value) {
-        jedis.setex(key, expireSecond, value);
-        return true;
+    private static final Method JEDIS_SET_EX_LONG;
+    private static final Method JEDIS_SET_EX_INT;
+
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("setex", String.class, long.class, String.class);
+        } catch (Throwable ignored) {}
+        JEDIS_SET_EX_LONG = m;
+
+        try {
+            m = Jedis.class.getMethod("setex", String.class, int.class, String.class);
+        } catch (Throwable ignored) {}
+        JEDIS_SET_EX_INT = m;
     }
 
-    private static final ExecutableAccessor compiledSetString = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.setex(key, expireSecond, value)");
+    private static boolean v2v3_setString(Jedis jedis, String key, int expireSecond, String value) {
+        try {
+            if (JEDIS_SET_EX_LONG != null) {
+                Object result = JEDIS_SET_EX_LONG.invoke(jedis, key, (long) expireSecond, value);
+                return result != null && "OK".equals(result.toString());
+            } else if (JEDIS_SET_EX_INT != null) {
+                Object result = JEDIS_SET_EX_INT.invoke(jedis, key, expireSecond, value);
+                return result != null && "OK".equals(result.toString());
+            } else {
+                throw new RuntimeException("Jedis.setex(key,expireSecond,value) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-    private static boolean v4_setString(Jedis jedis, String key, int expireSecond, String value) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("value", value);
-        params.put("expireSecond", ((long) expireSecond));
-        params.put("jedis", jedis);
-
-        MVEL.executeExpression(compiledSetString, params);
-        return true;
+    private static boolean v4v5v6_setString(Jedis jedis, String key, long expireSecond, String value) {
+        String str = jedis.setex(key, expireSecond, value);
+        return "OK".equals(str);
     }
 
     // END of setString
@@ -145,43 +183,42 @@ public class JedisVersionCompatible {
     // START of getExpireSecond
 
     public static long getExpireSecond(Jedis jedis, String key) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_getExpireSecond(jedis, key);
-            } else if (_jedisVer == 2 || _jedisVer == 3) {
-                return v3_getExpireSecond(jedis, key);
-            } else {
-                try {
-                    long result = v3_getExpireSecond(jedis, key);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    long result = v4_getExpireSecond(jedis, key);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("getExpireSecond operate jedis error, key:{}", key, e);
-            return -1;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_getExpireSecond(jedis, key);
+        } else {
+            return v4v5v6_getExpireSecond(jedis, key);
         }
     }
 
-    private static long v3_getExpireSecond(Jedis jedis, String key) {
+    private static long v4v5v6_getExpireSecond(Jedis jedis, String key) {
         return jedis.ttl(key);
     }
 
-    private static final ExecutableAccessor compiledGetExpireSecond = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.ttl(key)");
+    private static final Method JEDIS_TTL;
 
-    private static long v4_getExpireSecond(Jedis jedis, String key) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("jedis", jedis);
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("ttl", String.class);
+        } catch (Throwable ignored) {}
+        JEDIS_TTL = m;
+    }
 
-        Object result = MVEL.executeExpression(compiledGetExpireSecond, params);
-        return (long) result;
+    private static long v2v3_getExpireSecond(Jedis jedis, String key) {
+        try {
+            if (JEDIS_TTL != null) {
+                Object result = JEDIS_TTL.invoke(jedis, key);
+                if (result instanceof Number) {
+                    return ((Number) result).longValue();
+                } else {
+                    throw new RuntimeException("Jedis.ttl(key) return is not a number, result:" + result);
+                }
+            } else {
+                throw new RuntimeException("Jedis.ttl(key) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // END of getExpireSecond
@@ -189,45 +226,48 @@ public class JedisVersionCompatible {
     // START of setExpire
 
     public static boolean setExpire(Jedis jedis, String key, int expireSecond) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_setExpire(jedis, key, expireSecond);
-            } else if (_jedisVer == 2 || _jedisVer == 3) {
-                return v3_setExpire(jedis, key, expireSecond);
-            } else {
-                try {
-                    boolean result = v3_setExpire(jedis, key, expireSecond);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    boolean result = v4_setExpire(jedis, key, expireSecond);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("setExpire operate jedis error, key:{}, expireSecond:{}", key, expireSecond, e);
-            return false;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_setExpire(jedis, key, expireSecond);
+        } else {
+            return v4v5v6_setExpire(jedis, key, expireSecond);
         }
     }
 
-    private static boolean v3_setExpire(Jedis jedis, String key, int expireSecond) {
+    private static boolean v4v5v6_setExpire(Jedis jedis, String key, int expireSecond) {
         jedis.expire(key, expireSecond);
-        return true;
+        return true; // 即使key不存在，也认为是true
     }
 
-    private static final ExecutableAccessor compiledSetExpire = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.expire(key, expireSecond)");
+    private static final Method JEDIS_EXPIRE_INT;
+    private static final Method JEDIS_EXPIRE_LONG;
 
-    private static boolean v4_setExpire(Jedis jedis, String key, int expireSecond) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("expireSecond", ((long) expireSecond));
-        params.put("jedis", jedis);
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("expire", String.class, int.class);
+        } catch (Throwable ignored) {}
+        JEDIS_EXPIRE_INT = m;
 
-        MVEL.executeExpression(compiledSetExpire, params);
-        return true;
+        try {
+            m = Jedis.class.getMethod("expire", String.class, long.class);
+        } catch (Throwable ignored) {}
+        JEDIS_EXPIRE_LONG = m;
+    }
+
+    private static boolean v2v3_setExpire(Jedis jedis, String key, int expireSecond) {
+        try {
+            if (JEDIS_EXPIRE_INT != null) {
+                JEDIS_EXPIRE_INT.invoke(jedis, key, expireSecond);
+                return true; // 即使key不存在，也认为是true
+            } else if (JEDIS_EXPIRE_LONG != null) {
+                JEDIS_EXPIRE_LONG.invoke(jedis, key, (long) expireSecond);
+                return true; // 即使key不存在，也认为是true
+            } else {
+                throw new RuntimeException("Jedis.expire(key, expireSecond) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // END of setExpire
@@ -235,44 +275,39 @@ public class JedisVersionCompatible {
     // START of remove
 
     public static boolean remove(Jedis jedis, String key) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_remove(jedis, key);
-            } else if (_jedisVer == 2 || _jedisVer == 3) {
-                return v3_remove(jedis, key);
-            } else {
-                try {
-                    boolean result = v3_remove(jedis, key);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    boolean result = v4_remove(jedis, key);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("remove operate jedis error, key:{}", key, e);
-            return false;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_remove(jedis, key);
+        } else {
+            return v4v5v6_remove(jedis, key);
         }
     }
 
-    private static boolean v3_remove(Jedis jedis, String key) {
+    private static boolean v4v5v6_remove(Jedis jedis, String key) {
         jedis.del(key);
-        return true;
+        return true; // 不管key是否存在，remove都认为是成功
     }
 
-    private static final ExecutableAccessor compiledRemove = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.del(key)");
+    private static final Method JEDIS_DEL;
 
-    private static boolean v4_remove(Jedis jedis, String key) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("jedis", jedis);
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("del", String.class);
+        } catch (Throwable ignored) {}
+        JEDIS_DEL = m;
+    }
 
-        MVEL.executeExpression(compiledRemove, params);
-        return true;
+    private static boolean v2v3_remove(Jedis jedis, String key) {
+        try {
+            if (JEDIS_DEL != null) {
+                JEDIS_DEL.invoke(jedis, key);
+                return true; // 不管key是否存在，remove都认为是成功
+            } else {
+                throw new RuntimeException("Jedis.del(key) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // END of remove
@@ -280,43 +315,42 @@ public class JedisVersionCompatible {
     // START of incr
 
     public static long incr(Jedis jedis, String key) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_incr(jedis, key);
-            } else if (_jedisVer == 2 || _jedisVer == 3) {
-                return v3_incr(jedis, key);
-            } else {
-                try {
-                    long result = v3_incr(jedis, key);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    long result = v4_incr(jedis, key);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("incr operate jedis error, key:{}", key, e);
-            return -1;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_incr(jedis, key);
+        } else {
+            return v4v5v6_incr(jedis, key);
         }
     }
 
-    private static long v3_incr(Jedis jedis, String key) {
+    private static long v4v5v6_incr(Jedis jedis, String key) {
         return jedis.incr(key);
     }
 
-    private static final ExecutableAccessor compiledIncr = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.incr(key)");
+    private static final Method JEDIS_INCR;
 
-    private static long v4_incr(Jedis jedis, String key) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("jedis", jedis);
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("incr", String.class);
+        } catch (Throwable ignored) {}
+        JEDIS_INCR = m;
+    }
 
-        Object result = MVEL.executeExpression(compiledIncr, params);
-        return (long) result;
+    private static long v2v3_incr(Jedis jedis, String key) {
+        try {
+            if (JEDIS_INCR != null) {
+                Object result = JEDIS_INCR.invoke(jedis, key);
+                if (result instanceof Number) {
+                    return ((Number) result).longValue();
+                } else {
+                    throw new RuntimeException("Jedis.incr(key) return is not a number, result:" + result);
+                }
+            } else {
+                throw new RuntimeException("Jedis.incr(key) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // END of incr
@@ -324,44 +358,42 @@ public class JedisVersionCompatible {
     // START of incrBy
 
     public static long incrBy(Jedis jedis, String key, long increment) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_incrBy(jedis, key, increment);
-            } else if (_jedisVer == 2 || _jedisVer == 3) {
-                return v3_incrBy(jedis, key, increment);
-            } else {
-                try {
-                    long result = v3_incrBy(jedis, key, increment);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    long result = v4_incrBy(jedis, key, increment);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("incrBy operate jedis error, key:{}, increment:{}", key, increment, e);
-            return -1;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_incrBy(jedis, key, increment);
+        } else {
+            return v4v5v6_incrBy(jedis, key, increment);
         }
     }
 
-    private static long v3_incrBy(Jedis jedis, String key, long increment) {
+    private static long v4v5v6_incrBy(Jedis jedis, String key, long increment) {
         return jedis.incrBy(key, increment);
     }
 
-    private static final ExecutableAccessor compiledIncrBy = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.incrBy(key, increment)");
+    private static final Method JEDIS_INCR_BY;
 
-    private static long v4_incrBy(Jedis jedis, String key, long increment) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("increment", increment);
-        params.put("jedis", jedis);
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("incrBy", String.class, long.class);
+        } catch (Throwable ignored) {}
+        JEDIS_INCR_BY = m;
+    }
 
-        Object result = MVEL.executeExpression(compiledIncrBy, params);
-        return (long) result;
+    private static long v2v3_incrBy(Jedis jedis, String key, long increment) {
+        try {
+            if (JEDIS_INCR_BY != null) {
+                Object result = JEDIS_INCR_BY.invoke(jedis, key, increment);
+                if (result instanceof Number) {
+                    return ((Number) result).longValue();
+                } else {
+                    throw new RuntimeException("Jedis.incrBy(key, increment) return is not a number, result:" + result);
+                }
+            } else {
+                throw new RuntimeException("Jedis.incrBy(key, increment) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // END of incrBy
@@ -369,43 +401,42 @@ public class JedisVersionCompatible {
     // START of decr
 
     public static long decr(Jedis jedis, String key) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_decr(jedis, key);
-            } else if (_jedisVer == 2 || _jedisVer == 3) {
-                return v3_decr(jedis, key);
-            } else {
-                try {
-                    long result = v3_decr(jedis, key);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    long result = v4_decr(jedis, key);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("decr operate jedis error, key:{}", key, e);
-            return -1;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_decr(jedis, key);
+        } else {
+            return v4v5v6_decr(jedis, key);
         }
     }
 
-    private static long v3_decr(Jedis jedis, String key) {
+    private static long v4v5v6_decr(Jedis jedis, String key) {
         return jedis.decr(key);
     }
 
-    private static final ExecutableAccessor compiledDecr = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.decr(key)");
+    private static final Method JEDIS_DECR;
 
-    private static long v4_decr(Jedis jedis, String key) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("jedis", jedis);
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("decr", String.class);
+        } catch (Throwable ignored) {}
+        JEDIS_DECR = m;
+    }
 
-        Object result = MVEL.executeExpression(compiledDecr, params);
-        return (long) result;
+    private static long v2v3_decr(Jedis jedis, String key) {
+        try {
+            if (JEDIS_DECR != null) {
+                Object result = JEDIS_DECR.invoke(jedis, key);
+                if (result instanceof Number) {
+                    return ((Number) result).longValue();
+                } else {
+                    throw new RuntimeException("Jedis.decr(key) return is not a number, result:" + result);
+                }
+            } else {
+                throw new RuntimeException("Jedis.decr(key) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // END of decr
@@ -413,90 +444,85 @@ public class JedisVersionCompatible {
     // START of decrBy
 
     public static long decrBy(Jedis jedis, String key, long decrement) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_decrBy(jedis, key, decrement);
-            } else if (_jedisVer == 2 || _jedisVer == 3) {
-                return v3_decrBy(jedis, key, decrement);
-            } else {
-                try {
-                    long result = v3_decrBy(jedis, key, decrement);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    long result = v4_decrBy(jedis, key, decrement);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("decrBy operate jedis error, key:{}, decrement:{}", key, decrement, e);
-            return -1;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_decrBy(jedis, key, decrement);
+        } else {
+            return v4v5v6_decrBy(jedis, key, decrement);
         }
     }
 
-    private static long v3_decrBy(Jedis jedis, String key, long decrement) {
+    private static long v4v5v6_decrBy(Jedis jedis, String key, long decrement) {
         return jedis.decrBy(key, decrement);
     }
 
-    private static final ExecutableAccessor compiledDecrBy = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.decrBy(key, decrement)");
+    private static final Method JEDIS_DECR_BY;
 
-    private static long v4_decrBy(Jedis jedis, String key, long decrement) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("decrement", decrement);
-        params.put("jedis", jedis);
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("decrBy", String.class, long.class);
+        } catch (Throwable ignored) {}
+        JEDIS_DECR_BY = m;
+    }
 
-        Object result = MVEL.executeExpression(compiledDecrBy, params);
-        return (long) result;
+    private static long v2v3_decrBy(Jedis jedis, String key, long decrement) {
+        try {
+            if (JEDIS_DECR_BY != null) {
+                Object result = JEDIS_DECR_BY.invoke(jedis, key, decrement);
+                if (result instanceof Number) {
+                    return ((Number) result).longValue();
+                } else {
+                    throw new RuntimeException("Jedis.decrBy(key, decrement) return is not a number, result:" + result);
+                }
+            } else {
+                throw new RuntimeException("Jedis.decrBy(key, decrement) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // END of decrBy
 
-
     // START of sadd
 
     public static long sadd(Jedis jedis, String key, String member) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_sadd(jedis, key, member);
-            } else if (_jedisVer == 2 || _jedisVer == 3) {
-                return v3_sadd(jedis, key, member);
-            } else {
-                try {
-                    long result = v3_sadd(jedis, key, member);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    long result = v4_sadd(jedis, key, member);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("sadd operate jedis error, key:{}, member:{}", key, member, e);
-            return -1;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_sadd(jedis, key, member);
+        } else {
+            return v4v5v6_sadd(jedis, key, member);
         }
     }
 
-    private static long v3_sadd(Jedis jedis, String key, String member) {
+    private static long v4v5v6_sadd(Jedis jedis, String key, String member) {
         return jedis.sadd(key, member);
     }
 
-    private static final ExecutableAccessor compiledSadd = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.sadd(key, member)");
+    private static final Method JEDIS_SADD;
 
-    private static long v4_sadd(Jedis jedis, String key, String member) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("member", member);
-        params.put("jedis", jedis);
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("sadd", String.class, String[].class);
+        } catch (Throwable ignored) {}
+        JEDIS_SADD = m;
+    }
 
-        Object result = MVEL.executeExpression(compiledSadd, params);
-        return (long) result;
+    private static long v2v3_sadd(Jedis jedis, String key, String member) {
+        try {
+            if (JEDIS_SADD != null) {
+                Object result = JEDIS_SADD.invoke(jedis, key, new String[]{member});
+                if (result instanceof Number) {
+                    return ((Number) result).longValue();
+                } else {
+                    throw new RuntimeException("Jedis.sadd(key, member) return is not a number, result:" + result);
+                }
+            } else {
+                throw new RuntimeException("Jedis.sadd(key, member) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // END of sadd
@@ -504,45 +530,42 @@ public class JedisVersionCompatible {
     // START of hset
 
     public static long hset(Jedis jedis, String key, String field, String value) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_hset(jedis, key, field, value);
-            } else if (_jedisVer == 2 || _jedisVer == 3) {
-                return v3_hset(jedis, key, field, value);
-            } else {
-                try {
-                    long result = v3_hset(jedis, key, field, value);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    long result = v4_hset(jedis, key, field, value);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("hset operate jedis error, key:{}, field:{}, value:{}", key, field, value, e);
-            return -1;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_hset(jedis, key, field, value);
+        } else {
+            return v4v5v6_hset(jedis, key, field, value);
         }
     }
 
-    private static long v3_hset(Jedis jedis, String key, String field, String value) {
+    private static long v4v5v6_hset(Jedis jedis, String key, String field, String value) {
         return jedis.hset(key, field, value);
     }
 
-    private static final ExecutableAccessor compiledHset = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.hset(key, field, value)");
+    private static final Method JEDIS_HSET;
 
-    private static long v4_hset(Jedis jedis, String key, String field, String value) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("field", field);
-        params.put("value", value);
-        params.put("jedis", jedis);
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("hset", String.class, String.class, String.class);
+        } catch (Throwable ignored) {}
+        JEDIS_HSET = m;
+    }
 
-        Object result = MVEL.executeExpression(compiledHset, params);
-        return (long) result;
+    private static long v2v3_hset(Jedis jedis, String key, String field, String value) {
+        try {
+            if (JEDIS_HSET != null) {
+                Object result = JEDIS_HSET.invoke(jedis, key, field, value);
+                if (result instanceof Number) {
+                    return ((Number) result).longValue();
+                } else {
+                    throw new RuntimeException("Jedis.hset(key, field, value) return is not a number, result:" + result);
+                }
+            } else {
+                throw new RuntimeException("Jedis.hset(key, field, value) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // END of hset
@@ -550,43 +573,42 @@ public class JedisVersionCompatible {
     // START of llen
 
     public static long llen(Jedis jedis, String key) {
-        try {
-            int _jedisVer = jedisVer.get();
-            if (_jedisVer == 4) {
-                return v4_llen(jedis, key);
-            } else if (_jedisVer == 2 || _jedisVer == 3) {
-                return v3_llen(jedis, key);
-            } else {
-                try {
-                    long result = v3_llen(jedis, key);
-                    jedisVer.set(3);
-                    return result;
-                } catch (NoSuchMethodError | NoClassDefFoundError e) {
-                    long result = v4_llen(jedis, key);
-                    jedisVer.set(4);
-                    return result;
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.error("llen operate jedis error, key:{}", key, e);
-            return -1;
+        if (jedisVersion >= 2 && jedisVersion <= 3) {
+            return v2v3_llen(jedis, key);
+        } else {
+            return v4v5v6_llen(jedis, key);
         }
     }
 
-    private static long v3_llen(Jedis jedis, String key) {
+    private static long v4v5v6_llen(Jedis jedis, String key) {
         return jedis.llen(key);
     }
 
-    private static final ExecutableAccessor compiledLlen = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.llen(key)");
+    private static final Method JEDIS_LLEN;
 
-    private static long v4_llen(Jedis jedis, String key) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("jedis", jedis);
+    static {
+        Method m = null;
+        try {
+            m = Jedis.class.getMethod("llen", String.class);
+        } catch (Throwable ignored) {}
+        JEDIS_LLEN = m;
+    }
 
-        Object result = MVEL.executeExpression(compiledLlen, params);
-        return (long) result;
+    private static long v2v3_llen(Jedis jedis, String key) {
+        try {
+            if (JEDIS_LLEN != null) {
+                Object result = JEDIS_LLEN.invoke(jedis, key);
+                if (result instanceof Number) {
+                    return ((Number) result).longValue();
+                } else {
+                    throw new RuntimeException("Jedis.llen(key) return is not a number, result:" + result);
+                }
+            } else {
+                throw new RuntimeException("Jedis.llen(key) not found");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // END of llen

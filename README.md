@@ -9,4 +9,4 @@ useful redis features
 </dependency>
 ```
 
-Fully tests with Spring Boot 2.2.x ~ 3.x, jedis 3.1.0 ~ 5.x
+Fully tests with Spring Boot 2.2.x ~ 3.x, jedis 3.1.0 ~ 6.x

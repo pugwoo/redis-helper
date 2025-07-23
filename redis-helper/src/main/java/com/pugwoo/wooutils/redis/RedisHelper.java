@@ -148,8 +148,8 @@ public interface RedisHelper {
 
 	/**
 	 * 删除指定的key
-	 * @param key
-	 * @return
+	 * @param key 要删除的key
+	 * @return key不存在也认为是删除成功，返回true；只有当网络异常等情况，才返回false
 	 */
 	boolean remove(String key);
 	
