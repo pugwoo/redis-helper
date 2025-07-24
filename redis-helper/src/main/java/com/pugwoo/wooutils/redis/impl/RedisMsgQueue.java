@@ -41,7 +41,7 @@ public class RedisMsgQueue {
     }
 
     /**
-     * 发送消息，返回消息的uuid。默认的超时时间是86400秒
+     * 发送消息，返回消息的uuid。默认的超时时间是3600秒
      * @param redisHelper
      * @param topic topic将是redis的key
      * @param msg
@@ -97,7 +97,7 @@ public class RedisMsgQueue {
     }
     
     /**
-     * 发送消息，返回消息的uuidList。默认的超时时间是86400秒
+     * 发送消息，返回消息的uuidList。默认的超时时间是3600秒
      * @param redisHelper
      * @param topic topic将是redis的key
      * @param msgList 消息内容列表
