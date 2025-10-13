@@ -462,8 +462,8 @@ public class RedisHelperImpl implements RedisHelper {
 	}
 
 	@Override
-	public String requireShareLock(String namespace, String key, int maxTransactionSeconds, boolean isReentrantLock) {
-		return RedisLock.requireShareLock(this, namespace, key, maxTransactionSeconds, isReentrantLock);
+	public String requireShareLock(String namespace, String key, int maxTransactionSeconds, boolean isReentrantLock, int maxClients) {
+		return RedisLock.requireShareLock(this, namespace, key, maxTransactionSeconds, isReentrantLock, maxClients);
 	}
 
 	@Override

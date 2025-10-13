@@ -88,5 +88,18 @@ public class LockModeTestService {
         System.out.println(new Date() + " [混合锁] 线程 " + Thread.currentThread().getName() + " 执行完成");
         return "mixed-" + param;
     }
+
+    /**
+     * 使用共享锁，限制最大客户端数为2
+     * 最多只有2个线程可以同时执行
+     */
+    @Synchronized(namespace = "shareLockMaxClients", mode = "share", maxShareClients = 2, expireSecond = 10,
+                  waitLockMillisecond = 1000, throwExceptionIfNotGetLock = false)
+    public String shareLockWithMaxClients(String param) throws InterruptedException {
+        System.out.println(new Date() + " [共享锁-限制客户端数] 线程 " + Thread.currentThread().getName() + " 开始执行，参数: " + param);
+        Thread.sleep(2000); // 模拟业务处理
+        System.out.println(new Date() + " [共享锁-限制客户端数] 线程 " + Thread.currentThread().getName() + " 执行完成");
+        return "share-max-clients-" + param;
+    }
 }
 

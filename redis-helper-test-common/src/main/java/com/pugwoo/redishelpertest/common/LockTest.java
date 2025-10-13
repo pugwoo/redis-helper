@@ -189,7 +189,7 @@ public abstract class LockTest {
         assert !exclusiveLock.endsWith("[share]");
 
         // 2. 尝试获得共享锁，应该失败
-        String shareLock = getRedisHelper().requireShareLock(namespace, key, 10, false);
+        String shareLock = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
         assert StringTools.isBlank(shareLock);
 
         // 3. 释放排它锁
@@ -197,7 +197,7 @@ public abstract class LockTest {
         assert succ;
 
         // 4. 现在可以获得共享锁
-        String shareLock2 = getRedisHelper().requireShareLock(namespace, key, 10, false);
+        String shareLock2 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
         assert StringTools.isNotBlank(shareLock2);
 
         // 5. 清理
@@ -213,16 +213,16 @@ public abstract class LockTest {
         String key = "shareKey" + UUID.randomUUID();
 
         // 1. 第一个客户端获得共享锁
-        String shareLock1 = getRedisHelper().requireShareLock(namespace, key, 10, false);
+        String shareLock1 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
         assert StringTools.isNotBlank(shareLock1);
 
         // 2. 第二个客户端也可以获得共享锁
-        String shareLock2 = getRedisHelper().requireShareLock(namespace, key, 10, false);
+        String shareLock2 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
         assert StringTools.isNotBlank(shareLock2);
         assert !shareLock1.equals(shareLock2); // 两个锁的uuid应该不同
 
         // 3. 第三个客户端也可以获得共享锁
-        String shareLock3 = getRedisHelper().requireShareLock(namespace, key, 10, false);
+        String shareLock3 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
         assert StringTools.isNotBlank(shareLock3);
 
         // 4. 释放第一个锁，其他锁仍然有效
@@ -230,7 +230,7 @@ public abstract class LockTest {
         assert succ1;
 
         // 5. 第四个客户端仍然可以获得共享锁
-        String shareLock4 = getRedisHelper().requireShareLock(namespace, key, 10, false);
+        String shareLock4 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
         assert StringTools.isNotBlank(shareLock4);
 
         // 6. 清理所有锁
@@ -250,7 +250,7 @@ public abstract class LockTest {
         String key = "shareBlockKey" + UUID.randomUUID();
 
         // 1. 先获得共享锁
-        String shareLock = getRedisHelper().requireShareLock(namespace, key, 10, false);
+        String shareLock = getRedisHelper().requireShareLock(namespace, key, 10, false,0);
         assert StringTools.isNotBlank(shareLock);
 
         // 2. 尝试获得排它锁，应该失败
@@ -278,7 +278,7 @@ public abstract class LockTest {
         String key = "renewalShareKey" + UUID.randomUUID();
 
         // 1. 获得共享锁
-        String shareLock = getRedisHelper().requireShareLock(namespace, key, 5, false);
+        String shareLock = getRedisHelper().requireShareLock(namespace, key, 5, false, 0);
         assert StringTools.isNotBlank(shareLock);
 
         // 2. 等待3秒
@@ -304,11 +304,11 @@ public abstract class LockTest {
         String key = "reentrantShareKey" + UUID.randomUUID();
 
         // 1. 获得共享锁（可重入）
-        String shareLock1 = getRedisHelper().requireShareLock(namespace, key, 10, true);
+        String shareLock1 = getRedisHelper().requireShareLock(namespace, key, 10, true, 0);
         assert StringTools.isNotBlank(shareLock1);
 
         // 2. 再次获得共享锁（可重入），应该返回相同的uuid
-        String shareLock2 = getRedisHelper().requireShareLock(namespace, key, 10, true);
+        String shareLock2 = getRedisHelper().requireShareLock(namespace, key, 10, true, 0);
         assert StringTools.isNotBlank(shareLock2);
         assert shareLock1.equals(shareLock2);
 
@@ -343,7 +343,7 @@ public abstract class LockTest {
         // 启动多个线程同时获取共享锁
         for (int i = 0; i < THREAD_COUNT; i++) {
             Thread thread = new Thread(() -> {
-                String lockUuid = getRedisHelper().requireShareLock(namespace, key, 10, false);
+                String lockUuid = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
                 if (lockUuid != null) {
                     acquiredLocks.add(lockUuid);
                     try {
@@ -385,9 +385,9 @@ public abstract class LockTest {
         String key = "completeReleaseKey" + UUID.randomUUID();
 
         // 1. 三个客户端获得共享锁
-        String lock1 = getRedisHelper().requireShareLock(namespace, key, 10, false);
-        String lock2 = getRedisHelper().requireShareLock(namespace, key, 10, false);
-        String lock3 = getRedisHelper().requireShareLock(namespace, key, 10, false);
+        String lock1 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+        String lock2 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+        String lock3 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
 
         assert StringTools.isNotBlank(lock1);
         assert StringTools.isNotBlank(lock2);
@@ -414,6 +414,95 @@ public abstract class LockTest {
         // 6. 清理
         boolean succ4 = getRedisHelper().releaseLock(namespace, key, exclusiveLock2, false);
         assert succ4;
+    }
+
+    /**
+     * 测试共享锁的最大客户端数限制
+     */
+    @Test
+    public void testShareLockMaxClients() throws Exception {
+        String key = "maxClientsKey" + UUID.randomUUID();
+        int maxClients = 3;
+
+        // 1. 前3个客户端应该能成功获取共享锁
+        String lock1 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isNotBlank(lock1);
+
+        String lock2 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isNotBlank(lock2);
+
+        String lock3 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isNotBlank(lock3);
+
+        // 2. 第4个客户端应该无法获取锁（已达到最大客户端数）
+        String lock4 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isBlank(lock4);
+
+        // 3. 释放一个锁
+        boolean succ1 = getRedisHelper().releaseLock(namespace, key, lock1, false);
+        assert succ1;
+
+        // 4. 现在应该可以再获取一个锁
+        String lock5 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isNotBlank(lock5);
+
+        // 5. 再次尝试获取应该失败
+        String lock6 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isBlank(lock6);
+
+        // 6. 清理所有锁
+        boolean succ2 = getRedisHelper().releaseLock(namespace, key, lock2, false);
+        boolean succ3 = getRedisHelper().releaseLock(namespace, key, lock3, false);
+        boolean succ5 = getRedisHelper().releaseLock(namespace, key, lock5, false);
+        assert succ2;
+        assert succ3;
+        assert succ5;
+    }
+
+    /**
+     * 测试maxClients为0时不限制客户端数
+     */
+    @Test
+    public void testShareLockMaxClientsZero() throws Exception {
+        String key = "maxClientsZeroKey" + UUID.randomUUID();
+        int maxClients = 0; // 0表示不限制
+
+        // 获取多个锁，都应该成功
+        List<String> locks = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            String lock = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+            assert StringTools.isNotBlank(lock);
+            locks.add(lock);
+        }
+
+        // 清理所有锁
+        for (String lock : locks) {
+            boolean succ = getRedisHelper().releaseLock(namespace, key, lock, false);
+            assert succ;
+        }
+    }
+
+    /**
+     * 测试maxClients为负数时按0处理（不限制）
+     */
+    @Test
+    public void testShareLockMaxClientsNegative() throws Exception {
+        String key = "maxClientsNegativeKey" + UUID.randomUUID();
+        int maxClients = -5; // 负数按0处理，不限制
+
+        // 获取多个锁，都应该成功
+        List<String> locks = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            String lock = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+            assert StringTools.isNotBlank(lock);
+            locks.add(lock);
+        }
+
+        // 清理所有锁
+        for (String lock : locks) {
+            boolean succ = getRedisHelper().releaseLock(namespace, key, lock, false);
+            assert succ;
+        }
     }
 
 }

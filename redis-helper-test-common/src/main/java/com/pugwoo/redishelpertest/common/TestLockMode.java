@@ -235,5 +235,57 @@ public abstract class TestLockMode {
         // 混合锁需要同时获取两个锁，应该串行执行
         assert successCount.get() >= 1;
     }
+
+    /**
+     * 测试共享锁的最大客户端数限制
+     * maxShareClients = 2，最多只有2个线程可以同时执行
+     */
+    @Test
+    public void testShareLockWithMaxClients() throws Exception {
+        System.out.println("\n========== 测试共享锁最大客户端数限制 ==========");
+        List<Thread> threads = new ArrayList<>();
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failCount = new AtomicInteger(0);
+        long start = System.currentTimeMillis();
+
+        // 启动5个线程，但最多只有2个能同时执行
+        for (int i = 0; i < 5; i++) {
+            final int threadNum = i;
+            Thread t = new Thread(() -> {
+                try {
+                    String result = getLockModeTestService().shareLockWithMaxClients("thread-" + threadNum);
+                    if (result != null) {
+                        successCount.incrementAndGet();
+                        System.out.println("线程 " + threadNum + " 执行成功，结果: " + result);
+                    } else {
+                        failCount.incrementAndGet();
+                        System.out.println("线程 " + threadNum + " 未获取到锁（达到最大客户端数限制）");
+                    }
+                } catch (Exception e) {
+                    failCount.incrementAndGet();
+                    System.out.println("线程 " + threadNum + " 执行失败: " + e.getMessage());
+                }
+            });
+            t.start();
+            threads.add(t);
+            // 稍微延迟，确保线程按顺序启动
+            Thread.sleep(50);
+        }
+
+        for (Thread t : threads) {
+            t.join();
+        }
+
+        long cost = System.currentTimeMillis() - start;
+        System.out.println("共享锁最大客户端数测试完成，成功执行: " + successCount.get() + " 次，失败: " + failCount.get() + " 次，总耗时: " + cost + "ms");
+
+        // 因为最多2个线程同时执行，每次执行2秒，所以至少需要2轮
+        // 第一轮：2个线程同时执行（2秒）
+        // 第二轮：剩余3个线程中的2个执行（2秒）
+        // 第三轮：最后1个线程执行（2秒）
+        // 但由于waitLockMillisecond=1000，部分线程可能获取不到锁
+        assert successCount.get() >= 2; // 至少前2个线程应该成功
+        assert failCount.get() >= 1; // 至少有1个线程因为达到最大客户端数而失败
+    }
 }
 

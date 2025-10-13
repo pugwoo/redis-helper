@@ -176,7 +176,7 @@ public class RedisSyncAspect implements InitializingBean {
             try {
                 // 根据mode属性选择排它锁或共享锁
                 if ("share".equalsIgnoreCase(p.mode)) {
-                    lockUuid = redisHelper.requireShareLock(p.namespace, p.key, tmpExpireSecond, p.isReentrantLock);
+                    lockUuid = redisHelper.requireShareLock(p.namespace, p.key, tmpExpireSecond, p.isReentrantLock, p.maxShareClients);
                 } else {
                     lockUuid = redisHelper.requireLock(p.namespace, p.key, tmpExpireSecond, p.isReentrantLock);
                 }
@@ -349,6 +349,7 @@ public class RedisSyncAspect implements InitializingBean {
         redisSyncParam.isReentrantLock = sync.isReentrantLock();
         redisSyncParam.passThroughWhenRedisDown = sync.passThroughWhenRedisDown();
         redisSyncParam.mode = sync.mode();
+        redisSyncParam.maxShareClients = sync.maxShareClients();
         return redisSyncParam;
     }
 

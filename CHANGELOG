@@ -1,5 +1,6 @@
 v1.6.1 - [add] 增加distributed share lock分布式读写锁，方法redisHelper.requireShareLock
        - [add] @Synchronized支持share模式的分布式读写锁
+       - [add] @Synchronized支持maxShareClients属性，用于限制共享锁的最大客户端数
 
 2025年7月23日
 v1.6.0 - [add] 支持jedis 6.x, spring boot 3.5+

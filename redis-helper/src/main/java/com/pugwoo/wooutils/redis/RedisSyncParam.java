@@ -65,6 +65,11 @@ public class RedisSyncParam {
      */
     protected String mode = "exclusive";
 
+    /**
+     * @see Synchronized#maxShareClients()
+     */
+    protected int maxShareClients = 0;
+
     // #########################
 
     /**

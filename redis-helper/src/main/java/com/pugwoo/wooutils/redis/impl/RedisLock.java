@@ -119,14 +119,20 @@ public class RedisLock {
 	 * @param key 业务key
 	 * @param maxTransactionSeconds 单位秒，必须大于0,拿到锁之后,预计多久可以完成这个事务
 	 * @param isReentrantLock 是否是可重入锁
+	 * @param maxClients 最大客户端数，0表示不限制，>0表示限制最大客户端数，<0按0处理
 	 * @return 如果加锁成功，返回锁的唯一识别字符，可用于解锁；如果加锁失败，则返回null
 	 */
 	public static String requireShareLock(RedisHelper redisHelper, String namespace,
-										  String key, int maxTransactionSeconds, boolean isReentrantLock) {
+										  String key, int maxTransactionSeconds, boolean isReentrantLock,
+                                          int maxClients) {
 		if (namespace == null || key == null || key.isEmpty() || maxTransactionSeconds <= 0) {
 			LOGGER.error("requireShareLock with error params: namespace:{},key:{},maxTransactionSeconds:{}",
 					namespace, key, maxTransactionSeconds, new Exception());
 			return null;
+		}
+		// 处理maxClients参数，<0按0处理
+		if (maxClients < 0) {
+			maxClients = 0;
 		}
 
 		String newKey = getKey(namespace, key);
@@ -175,10 +181,11 @@ public class RedisLock {
 		// 3. 如果存在，检查值是否以[share]结尾
 		//    - 如果不是以[share]结尾，说明是排它锁，加锁失败
 		//    - 如果是以[share]结尾，说明是共享锁，可以加锁
-		// 4. 设置key-clients hash，存储clientUuid和lockInfo
-		// 5. 设置key-clientuuid，标记该客户端持有锁
-		// 6. 清理key-clients中已经过期的客户端（通过检查key-clientuuid是否存在）
-		// 7. 延长锁key的TTL为所有客户端中最大的maxTransactionSeconds
+		// 4. 清理key-clients中已经过期的客户端（通过检查key-clientuuid是否存在）
+		// 5. 检查最大客户端数限制（如果maxClients > 0）
+		// 6. 设置key-clients hash，存储clientUuid和lockInfo
+		// 7. 设置key-clientuuid，标记该客户端持有锁
+		// 8. 延长锁key的TTL为所有客户端中最大的maxTransactionSeconds
 		String shareLockScript =
 				// KEYS[1]: 锁key
 				// KEYS[2]: key-clients (hash类型)
@@ -187,6 +194,7 @@ public class RedisLock {
 				// ARGV[2]: maxTransactionSeconds
 				// ARGV[3]: lockInfo (JSON字符串)
 				// ARGV[4]: SHARE_LOCK_SUFFIX "[share]"
+				// ARGV[5]: maxClients (最大客户端数，0表示不限制)
 				"local lockKey = KEYS[1] " +
 				"local clientsKey = KEYS[2] " +
 				"local clientKey = KEYS[3] " +
@@ -194,6 +202,7 @@ public class RedisLock {
 				"local ttl = tonumber(ARGV[2]) " +
 				"local lockInfo = ARGV[3] " +
 				"local shareSuffix = ARGV[4] " +
+				"local maxClients = tonumber(ARGV[5]) " +
 				// 检查锁是否存在
 				"local lockValue = redis.call('GET', lockKey) " +
 				"if lockValue == false then " +
@@ -221,6 +230,14 @@ public class RedisLock {
 				"    redis.call('HDEL', clientsKey, cid) " +
 				"  end " +
 				"end " +
+				// 检查最大客户端数限制
+				"if maxClients > 0 then " +
+				"  local currentClientCount = redis.call('HLEN', clientsKey) " +
+				"  if currentClientCount >= maxClients then " +
+				// 已达到最大客户端数，加锁失败
+				"    return nil " +
+				"  end " +
+				"end " +
 				// 添加当前客户端到clients hash
 				"redis.call('HSET', clientsKey, clientUuid, lockInfo) " +
 				"redis.call('EXPIRE', clientsKey, ttl) " +
@@ -229,10 +246,12 @@ public class RedisLock {
 				"return clientUuid";
 
 		try {
-			Object result = redisHelper.execute(jedis -> {
+            int finalMaxClients = maxClients;
+            Object result = redisHelper.execute(jedis -> {
 				try {
 					return jedis.eval(shareLockScript, 3, newKey, clientsKey, clientKey,
-							clientUuid, String.valueOf(maxTransactionSeconds), lockInfo, SHARE_LOCK_SUFFIX);
+							clientUuid, String.valueOf(maxTransactionSeconds), lockInfo, SHARE_LOCK_SUFFIX,
+                            String.valueOf(finalMaxClients));
 				} catch (Exception e) {
 					LOGGER.error("requireShareLock eval error, namespace:{}, key:{}", namespace, key, e);
 					return null;
