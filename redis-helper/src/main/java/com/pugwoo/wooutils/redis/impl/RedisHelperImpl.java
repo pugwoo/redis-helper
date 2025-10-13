@@ -462,6 +462,11 @@ public class RedisHelperImpl implements RedisHelper {
 	}
 
 	@Override
+	public String requireShareLock(String namespace, String key, int maxTransactionSeconds, boolean isReentrantLock) {
+		return RedisLock.requireShareLock(this, namespace, key, maxTransactionSeconds, isReentrantLock);
+	}
+
+	@Override
 	public boolean renewalLock(String namespace, String key, String lockUuid, int maxTransactionSeconds) {
 		return RedisLock.renewalLock(this, namespace, key, lockUuid, maxTransactionSeconds);
 	}

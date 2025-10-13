@@ -226,6 +226,16 @@ public interface RedisHelper {
 	 */
 	String requireLock(String namespace, String key, int maxTransactionSeconds, boolean isReentrantLock);
 
+    /**
+     * 获得一个名称为key的共享锁。当该key已经存在了排它锁（由requireLock获取），那么加锁失败；当该key已经存在共享锁（由requireShareLock获取），那么可以加锁成功。
+     * @param namespace 命名空间，每个应用独立的空间
+     * @param key 业务key
+     * @param maxTransactionSeconds 单位秒，必须大于0,拿到锁之后,预计多久可以完成这个事务，如果超过这个时间还没有归还锁，那么事务将失败
+     * @param isReentrantLock 是否是可重入锁
+     * @return 如果加锁成功，返回锁的唯一识别字符，可用于解锁；如果加锁失败，则返回null
+     */
+    String requireShareLock(String namespace, String key, int maxTransactionSeconds, boolean isReentrantLock);
+
 	/**
 	 * 续期锁的有效期
 	 *
