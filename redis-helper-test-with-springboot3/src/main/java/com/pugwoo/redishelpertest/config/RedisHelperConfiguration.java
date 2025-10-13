@@ -5,6 +5,7 @@ import com.pugwoo.redishelpertest.ratelimit.RateLimitService;
 import com.pugwoo.redishelpertest.redis.sync.HeartbeatTestService;
 import com.pugwoo.redishelpertest.redis.sync.HelloService;
 import com.pugwoo.redishelpertest.redis.sync.HelloServiceWithMutilLock;
+import com.pugwoo.redishelpertest.redis.sync.LockModeTestService;
 import com.pugwoo.redishelpertest.redis.sync.ThrowIfNotGetLockTestService;
 import com.pugwoo.wooutils.cache.HiSpeedCacheAspect;
 import com.pugwoo.wooutils.redis.RedisHelper;
@@ -78,5 +79,10 @@ public class RedisHelperConfiguration {
     @Bean
     public ThrowIfNotGetLockTestService throwIfNotGetLockTestService() {
         return new ThrowIfNotGetLockTestService();
+    }
+
+    @Bean
+    public LockModeTestService lockModeTestService() {
+        return new LockModeTestService();
     }
 }

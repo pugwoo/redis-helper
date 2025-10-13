@@ -36,8 +36,13 @@ public @interface Synchronized {
 	 * @return 【重要】如果脚本执行出错，则打log，并等价于空字符串，并不会抛出异常阻止调用进行
 	 */
 	String keyScript() default "";
-	
-	/**
+
+    /**
+     * 锁的模式，可选值为exclusive和share，分别表示排它锁和共享锁。默认为exclusive
+     */
+    String mode() default "exclusive";
+
+    /**
 	 * 锁超时的秒数，如果使用者超过这个时间还没有主动释放锁，那么redis会自动释放掉该锁。
 	 * 请使用者合理评估任务执行时间，推荐按正常执行时间的10倍~100倍评估该时间。
      * <br>
