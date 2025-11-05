@@ -787,15 +787,16 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     private boolean setRedisCache(String cacheKey, Object value, int expireSecond, int continueFetchSecond) {
         String cacheConfigKey = getCacheConfigKey(cacheKey);
+        int ttl = Math.max(expireSecond, continueFetchSecond);
         try {
             Map<String, Object> config = new HashMap<>();
             config.put("et", System.currentTimeMillis() + expireSecond * 1000L);
-            redisHelper.setObject(cacheConfigKey, continueFetchSecond, config);
+            redisHelper.setObject(cacheConfigKey, ttl, config);
 
             if (NULL_VALUE.equals(value)) {
-                return redisHelper.setString(cacheKey, continueFetchSecond, NULL_VALUE);
+                return redisHelper.setString(cacheKey, ttl, NULL_VALUE);
             } else {
-                return redisHelper.setObject(cacheKey, continueFetchSecond, value);
+                return redisHelper.setObject(cacheKey, ttl, value);
             }
         } catch (Throwable e) {
             LOGGER.error("redis set error, key:{}", cacheKey, e);

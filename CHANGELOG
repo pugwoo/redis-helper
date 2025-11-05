@@ -1,3 +1,6 @@
+2025年11月5日
+v1.5.5 - [fix] 修复当@HiSpeedCache使用useRedis=true且continueFetchSecond为0时，设置缓存到redis时失效的问题(此时会降级为内存缓存)
+
 2025年4月8日
 v1.5.4 - [enhance] 增加HiSpeedCache健壮性，当redis故障时，可自动降级为内存缓存和业务调用；
                    当业务故障时，自动降级为redis过期缓存
