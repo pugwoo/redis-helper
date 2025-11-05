@@ -143,6 +143,11 @@ public class HiSpeedCacheAspect implements InitializingBean {
             return pjp.proceed();
         }
 
+        // 当expireSecond小于等于0时，等价于没有这个注解，不做缓存
+        if (hiSpeedCache.expireSecond() <= 0) {
+            return pjp.proceed();
+        }
+
         boolean useRedis = checkUseRedis(hiSpeedCache);
 
         ParameterizedType type = null;
