@@ -33,7 +33,8 @@ public @interface HiSpeedCache {
     String cacheConditionScript() default "";
 
     /**
-     * 高速缓存的超时时间，默认1秒，建议使用1到10秒
+     * 高速缓存的超时时间，默认1秒，建议使用1到10秒<br>
+     * 当此值小于等于0时，等价于没有这个注解，不做缓存，直接调用目标方法
      */
     int expireSecond() default 1;
 
