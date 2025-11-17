@@ -232,7 +232,7 @@ public interface RedisHelper {
      * @param key 业务key
      * @param maxTransactionSeconds 单位秒，必须大于0,拿到锁之后,预计多久可以完成这个事务，如果超过这个时间还没有归还锁，那么事务将失败
      * @param isReentrantLock 是否是可重入锁
-     * @param maxClients 最大客户端数，0表示不限制，>0表示限制最大客户端数，<0按0处理
+     * @param maxClients 最大客户端数，0表示不限制，大于0表示限制最大客户端数，小于0按0处理
      * @return 如果加锁成功，返回锁的唯一识别字符，可用于解锁；如果加锁失败，则返回null
      */
     String requireShareLock(String namespace, String key, int maxTransactionSeconds, boolean isReentrantLock,
