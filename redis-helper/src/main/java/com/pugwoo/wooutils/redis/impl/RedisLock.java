@@ -25,8 +25,25 @@ public class RedisLock {
 	/**key -> keyUuid*/
 	private static final ThreadLocal<Map<String, String>> lockUuidTL = new ThreadLocal<>();
 
+	/**共享锁标识后缀*/
+	private static final String SHARE_LOCK_SUFFIX = "[share]";
+
 	public static String getKey(String namespace, String key) {
 		return namespace + ":" + key;
+	}
+
+	/**
+	 * 获取存储共享锁客户端信息的hash key
+	 */
+	private static String getClientsKey(String lockKey) {
+		return lockKey + "-clients";
+	}
+
+	/**
+	 * 获取存储单个客户端的key
+	 */
+	private static String getClientKey(String lockKey, String clientUuid) {
+		return lockKey + "-" + clientUuid;
 	}
 
     /**
@@ -94,6 +111,169 @@ public class RedisLock {
     }
 
 	/**
+	 * 获得一个名称为key的共享锁。
+	 * 当该key已经存在了排它锁（由requireLock获取），那么加锁失败；
+	 * 当该key已经存在共享锁（由requireShareLock获取），那么可以加锁成功。
+	 *
+	 * @param namespace 命名空间，每个应用独立的空间
+	 * @param key 业务key
+	 * @param maxTransactionSeconds 单位秒，必须大于0,拿到锁之后,预计多久可以完成这个事务
+	 * @param isReentrantLock 是否是可重入锁
+	 * @param maxClients 最大客户端数，0表示不限制，>0表示限制最大客户端数，<0按0处理
+	 * @return 如果加锁成功，返回锁的唯一识别字符，可用于解锁；如果加锁失败，则返回null
+	 */
+	public static String requireShareLock(RedisHelper redisHelper, String namespace,
+										  String key, int maxTransactionSeconds, boolean isReentrantLock,
+                                          int maxClients) {
+		if (namespace == null || key == null || key.isEmpty() || maxTransactionSeconds <= 0) {
+			LOGGER.error("requireShareLock with error params: namespace:{},key:{},maxTransactionSeconds:{}",
+					namespace, key, maxTransactionSeconds, new Exception());
+			return null;
+		}
+		// 处理maxClients参数，<0按0处理
+		if (maxClients < 0) {
+			maxClients = 0;
+		}
+
+		String newKey = getKey(namespace, key);
+
+		// 处理可重入锁逻辑
+		if (isReentrantLock) {
+			if (lockCount.get() == null) {
+				lockCount.set(new HashMap<>());
+			}
+			if (lockUuidTL.get() == null) {
+				lockUuidTL.set(new HashMap<>());
+			}
+
+			Integer lc = lockCount.get().get(newKey);
+			String uuid = lockUuidTL.get().get(newKey);
+			if (lc != null && lc >= 1 && uuid != null && !uuid.isEmpty()) {
+				lockCount.get().put(newKey, lc + 1);
+				// 可重入锁获得的锁不续期，理由同requireLock
+				return uuid;
+			}
+		}
+
+		String clientUuid = UUID.randomUUID().toString();
+		String clientsKey = getClientsKey(newKey);
+		String clientKey = getClientKey(newKey, clientUuid);
+
+		// 获取客户端信息用于记录
+		List<String> ipv4IPs = new ArrayList<>();
+		try {
+			ipv4IPs = InnerCommonUtils.getIpv4IPs();
+		} catch (Exception e) {
+			LOGGER.error("getIpv4IPs error", e);
+		}
+		String ip = String.join(";", ipv4IPs);
+		Long threadId = Thread.currentThread().getId();
+		long lockTimestamp = System.currentTimeMillis();
+
+		// 构造lockInfo JSON字符串
+		String lockInfo = String.format("{\"clientIp\":\"%s\",\"clientThreadId\":%d,\"lockTimestamp\":%d}",
+				ip, threadId, lockTimestamp);
+
+		// Lua脚本：原子性地获取共享锁
+		// 逻辑：
+		// 1. 检查锁key是否存在
+		// 2. 如果不存在，创建锁key，值为clientUuid[share]
+		// 3. 如果存在，检查值是否以[share]结尾
+		//    - 如果不是以[share]结尾，说明是排它锁，加锁失败
+		//    - 如果是以[share]结尾，说明是共享锁，可以加锁
+		// 4. 清理key-clients中已经过期的客户端（通过检查key-clientuuid是否存在）
+		// 5. 检查最大客户端数限制（如果maxClients > 0）
+		// 6. 设置key-clients hash，存储clientUuid和lockInfo
+		// 7. 设置key-clientuuid，标记该客户端持有锁
+		// 8. 延长锁key的TTL为所有客户端中最大的maxTransactionSeconds
+		String shareLockScript =
+				// KEYS[1]: 锁key
+				// KEYS[2]: key-clients (hash类型)
+				// KEYS[3]: key-clientuuid
+				// ARGV[1]: clientUuid
+				// ARGV[2]: maxTransactionSeconds
+				// ARGV[3]: lockInfo (JSON字符串)
+				// ARGV[4]: SHARE_LOCK_SUFFIX "[share]"
+				// ARGV[5]: maxClients (最大客户端数，0表示不限制)
+				"local lockKey = KEYS[1] " +
+				"local clientsKey = KEYS[2] " +
+				"local clientKey = KEYS[3] " +
+				"local clientUuid = ARGV[1] " +
+				"local ttl = tonumber(ARGV[2]) " +
+				"local lockInfo = ARGV[3] " +
+				"local shareSuffix = ARGV[4] " +
+				"local maxClients = tonumber(ARGV[5]) " +
+				// 检查锁是否存在
+				"local lockValue = redis.call('GET', lockKey) " +
+				"if lockValue == false then " +
+				// 锁不存在，创建共享锁
+				"  redis.call('SETEX', lockKey, ttl, clientUuid .. shareSuffix) " +
+				"else " +
+				// 锁存在，检查是否是共享锁
+				"  local len = string.len(shareSuffix) " +
+				"  local suffix = string.sub(lockValue, -len) " +
+				"  if suffix ~= shareSuffix then " +
+				// 不是共享锁，是排它锁，加锁失败
+				"    return nil " +
+				"  end " +
+				// 是共享锁，延长锁的TTL
+				"  local currentTTL = redis.call('TTL', lockKey) " +
+				"  if currentTTL < ttl then " +
+				"    redis.call('EXPIRE', lockKey, ttl) " +
+				"  end " +
+				"end " +
+				// 清理已过期的客户端（检查key-clientuuid是否存在）
+				"local allClients = redis.call('HKEYS', clientsKey) " +
+				"for i, cid in ipairs(allClients) do " +
+				"  local cKey = lockKey .. '-' .. cid " +
+				"  if redis.call('EXISTS', cKey) == 0 then " +
+				"    redis.call('HDEL', clientsKey, cid) " +
+				"  end " +
+				"end " +
+				// 检查最大客户端数限制
+				"if maxClients > 0 then " +
+				"  local currentClientCount = redis.call('HLEN', clientsKey) " +
+				"  if currentClientCount >= maxClients then " +
+				// 已达到最大客户端数，加锁失败
+				"    return nil " +
+				"  end " +
+				"end " +
+				// 添加当前客户端到clients hash
+				"redis.call('HSET', clientsKey, clientUuid, lockInfo) " +
+				"redis.call('EXPIRE', clientsKey, ttl) " +
+				// 设置客户端key，标记该客户端持有锁
+				"redis.call('SETEX', clientKey, ttl, '1') " +
+				"return clientUuid";
+
+		try {
+            int finalMaxClients = maxClients;
+            Object result = redisHelper.execute(jedis -> {
+				try {
+					return jedis.eval(shareLockScript, 3, newKey, clientsKey, clientKey,
+							clientUuid, String.valueOf(maxTransactionSeconds), lockInfo, SHARE_LOCK_SUFFIX,
+                            String.valueOf(finalMaxClients));
+				} catch (Exception e) {
+					LOGGER.error("requireShareLock eval error, namespace:{}, key:{}", namespace, key, e);
+					return null;
+				}
+			});
+
+			if (result != null && result.equals(clientUuid)) {
+				if (isReentrantLock) {
+					lockCount.get().put(newKey, 1);
+					lockUuidTL.get().put(newKey, clientUuid);
+				}
+				return clientUuid;
+			} else {
+				return null;
+			}
+		} catch (Exception e) {
+			LOGGER.error("requireShareLock error, namespace:{}, key:{}", namespace, key, e);
+			return null;
+		}
+	}
+
+	/**
 	 * 写入分布式锁的加锁者信息：ip、threadId
 	 */
 	private static void recordLockInfo(RedisHelper redisHelper, String newKey, int maxTransactionSeconds) {
@@ -114,8 +294,10 @@ public class RedisLock {
 	}
 
     /**
-     * 续期锁，也即延长锁的过时时间，需要提供锁的uuid，
-	 * 但是这里并不需要保持原子操作，也即可能存在极低概率的误续了别人的锁，但是没有关系，它不会一直续下去
+     * 续期锁，也即延长锁的过时时间，需要提供锁的uuid。
+	 * 支持排它锁和共享锁的续期。
+	 * 对于排它锁：检查uuid是否匹配，匹配则续期
+	 * 对于共享锁：检查客户端是否在clients中，如果在则续期客户端key和clients hash，并清理过期客户端
      * @param namespace 命名空间，每个应用独立的空间
      * @param key 业务key，redis将保证同一个namespace同一个key只有一个client可以拿到锁
 	 * @param lockUuid 加的锁的uuid，会检查续锁的人是否是加锁的人
@@ -148,27 +330,110 @@ public class RedisLock {
 				}
 
 				return false;
-			} else if (!value.equals(lockUuid)) {
-				LOGGER.error("renewalLock namespace:{}, key:{}, lockUuid not match, given:{}, in redis:{}",
-						namespace, key, lockUuid, value);
-				return false;
+			}
+
+			// 检查是否是共享锁
+			if (value.endsWith(SHARE_LOCK_SUFFIX)) {
+				// 共享锁续期逻辑
+				return renewalShareLock(redisHelper, newKey, lockUuid, maxTransactionSeconds);
 			} else {
-				// 虽然从查询uuid到实际去续期，中间可能发生了锁的变化，但是这个情况出现概率极低
-				// 而且出现了也没有大的问题，只是帮另外一个锁续期了一次，后续也不会一直续期
-				boolean result = redisHelper.setExpire(newKey, maxTransactionSeconds);
-				if (result) {
-					redisHelper.setExpire(newKey + ".lockInfo", maxTransactionSeconds);
+				// 排它锁续期逻辑
+				if (!value.equals(lockUuid)) {
+					LOGGER.error("renewalLock namespace:{}, key:{}, lockUuid not match, given:{}, in redis:{}",
+							namespace, key, lockUuid, value);
+					return false;
+				} else {
+					// 虽然从查询uuid到实际去续期，中间可能发生了锁的变化，但是这个情况出现概率极低
+					// 而且出现了也没有大的问题，只是帮另外一个锁续期了一次，后续也不会一直续期
+					boolean result = redisHelper.setExpire(newKey, maxTransactionSeconds);
+					if (result) {
+						redisHelper.setExpire(newKey + ".lockInfo", maxTransactionSeconds);
+					}
+					return result;
 				}
-				return result;
 			}
         } catch (Exception e) {
             LOGGER.error("renewalLock error, namespace:{}, key:{}", namespace, key, e);
             return false;
         }
     }
+
+	/**
+	 * 续期共享锁
+	 * 逻辑：
+	 * 1. 检查客户端是否在key-clients中
+	 * 2. 如果在，续期key-clientuuid和key-clients的TTL
+	 * 3. 清理key-clients中已经过期的客户端
+	 * 4. 如果还有存活的客户端，延长锁key的TTL
+	 */
+	private static boolean renewalShareLock(RedisHelper redisHelper, String lockKey,
+											String clientUuid, int maxTransactionSeconds) {
+		String clientsKey = getClientsKey(lockKey);
+		String clientKey = getClientKey(lockKey, clientUuid);
+
+		// Lua脚本：原子性地续期共享锁
+		// KEYS[1]: 锁key
+		// KEYS[2]: key-clients
+		// KEYS[3]: key-clientuuid
+		// ARGV[1]: clientUuid
+		// ARGV[2]: maxTransactionSeconds
+		String renewalShareLockScript =
+				"local lockKey = KEYS[1] " +
+				"local clientsKey = KEYS[2] " +
+				"local clientKey = KEYS[3] " +
+				"local clientUuid = ARGV[1] " +
+				"local ttl = tonumber(ARGV[2]) " +
+				// 检查客户端是否在clients中
+				"if redis.call('HEXISTS', clientsKey, clientUuid) == 0 then " +
+				"  return 0 " +
+				"end " +
+				// 清理已过期的客户端
+				"local allClients = redis.call('HKEYS', clientsKey) " +
+				"for i, cid in ipairs(allClients) do " +
+				"  local cKey = lockKey .. '-' .. cid " +
+				"  if redis.call('EXISTS', cKey) == 0 then " +
+				"    redis.call('HDEL', clientsKey, cid) " +
+				"  end " +
+				"end " +
+				// 续期当前客户端的key
+				"redis.call('EXPIRE', clientKey, ttl) " +
+				// 续期clients hash
+				"redis.call('EXPIRE', clientsKey, ttl) " +
+				// 检查是否还有客户端，如果有则续期锁key
+				"local remainingClients = redis.call('HLEN', clientsKey) " +
+				"if remainingClients > 0 then " +
+				"  local currentTTL = redis.call('TTL', lockKey) " +
+				"  if currentTTL < ttl then " +
+				"    redis.call('EXPIRE', lockKey, ttl) " +
+				"  end " +
+				"  return 1 " +
+				"else " +
+				// 没有客户端了，删除锁
+				"  redis.call('DEL', lockKey) " +
+				"  return 0 " +
+				"end";
+
+		try {
+			Object result = redisHelper.execute(jedis -> {
+				try {
+					return jedis.eval(renewalShareLockScript, 3, lockKey, clientsKey, clientKey,
+							clientUuid, String.valueOf(maxTransactionSeconds));
+				} catch (Exception e) {
+					LOGGER.error("renewalShareLock eval error, lockKey:{}", lockKey, e);
+					return 0L;
+				}
+			});
+
+			return "1".equals(result.toString());
+		} catch (Exception e) {
+			LOGGER.error("renewalShareLock error, lockKey:{}", lockKey, e);
+			return false;
+		}
+	}
 	
 	/**
 	 * 如果事务已经完成，则归还锁。
+	 * 支持排它锁和共享锁的释放。
 	 * @param namespace 命名空间，每个应用独立的空间
 	 * @param key 业务key，redis将保证同一个namespace同一个key只有一个client可以拿到锁
 	 * @param lockUuid 锁的uuid，必须提供正确的uuid才可以解锁
@@ -210,26 +475,105 @@ public class RedisLock {
 					lockUuidTL.get().remove(newKey);
 				}
 				return true;
-			} else if (value.equals(lockUuid)) {
-				redisHelper.remove(newKey, lockUuid); // 这个是原子操作
-				// 说明，此处不移除lockInfo，原因是它只是一个加锁信息，有过期时间，直接等待过期就可以了，也便于在锁是否的短时间内，根据其信息debug问题
-				if (isReentrantLock) {
+			}
+
+			// 检查是否是共享锁
+			if (value.endsWith(SHARE_LOCK_SUFFIX)) {
+				// 共享锁释放逻辑
+				boolean result = releaseShareLock(redisHelper, newKey, lockUuid);
+				if (result && isReentrantLock) {
 					lockCount.get().remove(newKey);
 					lockUuidTL.get().remove(newKey);
 				}
-				return true; // 就算lock uuid不匹配，也说明这个锁不是属于自己了，返回true表示解锁成功了
+				return result;
 			} else {
-				LOGGER.error("releaseLock namespace:{}, key:{} fail, uuid not match, redis:{}, given:{}",
-						namespace, key, value, lockUuid);
-				if (isReentrantLock) { // 这个时候锁已经不是自己的了，所以要清理掉
-					lockCount.get().remove(newKey);
-					lockUuidTL.get().remove(newKey);
+				// 排它锁释放逻辑
+				if (value.equals(lockUuid)) {
+					redisHelper.remove(newKey, lockUuid); // 这个是原子操作
+					// 说明，此处不移除lockInfo，原因是它只是一个加锁信息，有过期时间，直接等待过期就可以了，也便于在锁是否的短时间内，根据其信息debug问题
+					if (isReentrantLock) {
+						lockCount.get().remove(newKey);
+						lockUuidTL.get().remove(newKey);
+					}
+					return true; // 就算lock uuid不匹配，也说明这个锁不是属于自己了，返回true表示解锁成功了
+				} else {
+					LOGGER.error("releaseLock namespace:{}, key:{} fail, uuid not match, redis:{}, given:{}",
+							namespace, key, value, lockUuid);
+					if (isReentrantLock) { // 这个时候锁已经不是自己的了，所以要清理掉
+						lockCount.get().remove(newKey);
+						lockUuidTL.get().remove(newKey);
+					}
+					return false;
 				}
-				return false;
 			}
 		} catch (Exception e) {
 			// 这里可能由于网络原因，redis锁还在，所以不清理lockCount，以允许再次releaseLock
 			LOGGER.error("releaseLock error, namespace:{}, key:{}", namespace, key, e);
+			return false;
+		}
+	}
+
+	/**
+	 * 释放共享锁
+	 * 逻辑：
+	 * 1. 从key-clients中删除当前客户端
+	 * 2. 删除key-clientuuid
+	 * 3. 清理key-clients中已经过期的客户端
+	 * 4. 如果key-clients中没有客户端了，删除锁key和key-clients
+	 */
+	private static boolean releaseShareLock(RedisHelper redisHelper, String lockKey, String clientUuid) {
+		String clientsKey = getClientsKey(lockKey);
+		String clientKey = getClientKey(lockKey, clientUuid);
+
+		// Lua脚本：原子性地释放共享锁
+		// KEYS[1]: 锁key
+		// KEYS[2]: key-clients
+		// KEYS[3]: key-clientuuid
+		// ARGV[1]: clientUuid
+		String releaseShareLockScript =
+				"local lockKey = KEYS[1] " +
+				"local clientsKey = KEYS[2] " +
+				"local clientKey = KEYS[3] " +
+				"local clientUuid = ARGV[1] " +
+				// 检查客户端是否在clients中
+				"if redis.call('HEXISTS', clientsKey, clientUuid) == 0 then " +
+				// 客户端不在，可能已经被清理了，返回成功
+				"  redis.call('DEL', clientKey) " +
+				"  return 1 " +
+				"end " +
+				// 删除当前客户端
+				"redis.call('HDEL', clientsKey, clientUuid) " +
+				"redis.call('DEL', clientKey) " +
+				// 清理已过期的客户端
+				"local allClients = redis.call('HKEYS', clientsKey) " +
+				"for i, cid in ipairs(allClients) do " +
+				"  local cKey = lockKey .. '-' .. cid " +
+				"  if redis.call('EXISTS', cKey) == 0 then " +
+				"    redis.call('HDEL', clientsKey, cid) " +
+				"  end " +
+				"end " +
+				// 检查是否还有客户端
+				"local remainingClients = redis.call('HLEN', clientsKey) " +
+				"if remainingClients == 0 then " +
+				// 没有客户端了，删除锁和clients hash
+				"  redis.call('DEL', lockKey) " +
+				"  redis.call('DEL', clientsKey) " +
+				"end " +
+				"return 1";
+
+		try {
+			Object result = redisHelper.execute(jedis -> {
+				try {
+					return jedis.eval(releaseShareLockScript, 3, lockKey, clientsKey, clientKey, clientUuid);
+				} catch (Exception e) {
+					LOGGER.error("releaseShareLock eval error, lockKey:{}", lockKey, e);
+					return 0L;
+				}
+			});
+
+			return "1".equals(result.toString());
+		} catch (Exception e) {
+			LOGGER.error("releaseShareLock error, lockKey:{}", lockKey, e);
 			return false;
 		}
 	}

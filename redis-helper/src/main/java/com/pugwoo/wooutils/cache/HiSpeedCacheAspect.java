@@ -143,6 +143,11 @@ public class HiSpeedCacheAspect implements InitializingBean {
             return pjp.proceed();
         }
 
+        // 当expireSecond小于等于0时，等价于没有这个注解，不做缓存
+        if (hiSpeedCache.expireSecond() <= 0) {
+            return pjp.proceed();
+        }
+
         boolean useRedis = checkUseRedis(hiSpeedCache);
 
         ParameterizedType type = null;
@@ -787,15 +792,16 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     private boolean setRedisCache(String cacheKey, Object value, int expireSecond, int continueFetchSecond) {
         String cacheConfigKey = getCacheConfigKey(cacheKey);
+        int ttl = Math.max(expireSecond, continueFetchSecond);
         try {
             Map<String, Object> config = new HashMap<>();
             config.put("et", System.currentTimeMillis() + expireSecond * 1000L);
-            redisHelper.setObject(cacheConfigKey, continueFetchSecond, config);
+            redisHelper.setObject(cacheConfigKey, ttl, config);
 
             if (NULL_VALUE.equals(value)) {
-                return redisHelper.setString(cacheKey, continueFetchSecond, NULL_VALUE);
+                return redisHelper.setString(cacheKey, ttl, NULL_VALUE);
             } else {
-                return redisHelper.setObject(cacheKey, continueFetchSecond, value);
+                return redisHelper.setObject(cacheKey, ttl, value);
             }
         } catch (Throwable e) {
             LOGGER.error("redis set error, key:{}", cacheKey, e);

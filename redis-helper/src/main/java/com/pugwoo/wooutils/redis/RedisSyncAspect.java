@@ -174,10 +174,15 @@ public class RedisSyncAspect implements InitializingBean {
             String lockUuid = null;
 
             try {
-                lockUuid = redisHelper.requireLock(p.namespace, p.key, tmpExpireSecond, p.isReentrantLock);
+                // 根据mode属性选择排它锁或共享锁
+                if ("share".equalsIgnoreCase(p.mode)) {
+                    lockUuid = redisHelper.requireShareLock(p.namespace, p.key, tmpExpireSecond, p.isReentrantLock, p.maxShareClients);
+                } else {
+                    lockUuid = redisHelper.requireLock(p.namespace, p.key, tmpExpireSecond, p.isReentrantLock);
+                }
                 isRedisDown = false;
             } catch (Throwable e) {
-                LOGGER.error("get lock error, namespace:{}, key:{}", p.namespace, p.key, e);
+                LOGGER.error("get lock error, namespace:{}, key:{}, mode:{}", p.namespace, p.key, p.mode, e);
             }
 
             if (lockUuid != null) {
@@ -257,12 +262,13 @@ public class RedisSyncAspect implements InitializingBean {
 
     private void logSuccessGetLock(RedisSyncParam p, String lockUuid) {
         if (p.logDebug) {
+            String lockMode = "share".equalsIgnoreCase(p.mode) ? "share lock" : "exclusive lock";
             if (p.expireSecond > 0) {
-                LOGGER.info("namespace:{},key:{},got lock,expireSecond:{},lockUuid:{},threadName:{}",
-                        p.namespace, p.key, p.expireSecond, lockUuid, Thread.currentThread().getName());
+                LOGGER.info("namespace:{},key:{},got {},expireSecond:{},lockUuid:{},threadName:{}",
+                        p.namespace, p.key, lockMode, p.expireSecond, lockUuid, Thread.currentThread().getName());
             } else {
-                LOGGER.info("namespace:{},key:{},got lock,heartbeatExpireSecond:{},lockUuid:{},threadName:{}",
-                        p.namespace, p.key, p.heartbeatExpireSecond, lockUuid,
+                LOGGER.info("namespace:{},key:{},got {},heartbeatExpireSecond:{},lockUuid:{},threadName:{}",
+                        p.namespace, p.key, lockMode, p.heartbeatExpireSecond, lockUuid,
                         Thread.currentThread().getName());
             }
         }
@@ -342,6 +348,8 @@ public class RedisSyncAspect implements InitializingBean {
         redisSyncParam.throwExceptionIfNotGetLock = sync.throwExceptionIfNotGetLock();
         redisSyncParam.isReentrantLock = sync.isReentrantLock();
         redisSyncParam.passThroughWhenRedisDown = sync.passThroughWhenRedisDown();
+        redisSyncParam.mode = sync.mode();
+        redisSyncParam.maxShareClients = sync.maxShareClients();
         return redisSyncParam;
     }
 

@@ -176,4 +176,333 @@ public abstract class LockTest {
         assert (end - start) <= THREAD * SLEEP + 5000; // 预留5秒的耗时
     }
 
+    /**
+     * 测试排它锁阻止共享锁
+     */
+    @Test
+    public void testExclusiveLockBlocksShareLock() throws Exception {
+        String key = "exclusiveKey" + UUID.randomUUID();
+
+        // 1. 先获得排它锁
+        String exclusiveLock = getRedisHelper().requireLock(namespace, key, 10, false);
+        assert StringTools.isNotBlank(exclusiveLock);
+        assert !exclusiveLock.endsWith("[share]");
+
+        // 2. 尝试获得共享锁，应该失败
+        String shareLock = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+        assert StringTools.isBlank(shareLock);
+
+        // 3. 释放排它锁
+        boolean succ = getRedisHelper().releaseLock(namespace, key, exclusiveLock, false);
+        assert succ;
+
+        // 4. 现在可以获得共享锁
+        String shareLock2 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+        assert StringTools.isNotBlank(shareLock2);
+
+        // 5. 清理
+        boolean succ2 = getRedisHelper().releaseLock(namespace, key, shareLock2, false);
+        assert succ2;
+    }
+
+    /**
+     * 测试共享锁允许多个客户端同时持有
+     */
+    @Test
+    public void testMultipleShareLocks() throws Exception {
+        String key = "shareKey" + UUID.randomUUID();
+
+        // 1. 第一个客户端获得共享锁
+        String shareLock1 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+        assert StringTools.isNotBlank(shareLock1);
+
+        // 2. 第二个客户端也可以获得共享锁
+        String shareLock2 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+        assert StringTools.isNotBlank(shareLock2);
+        assert !shareLock1.equals(shareLock2); // 两个锁的uuid应该不同
+
+        // 3. 第三个客户端也可以获得共享锁
+        String shareLock3 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+        assert StringTools.isNotBlank(shareLock3);
+
+        // 4. 释放第一个锁，其他锁仍然有效
+        boolean succ1 = getRedisHelper().releaseLock(namespace, key, shareLock1, false);
+        assert succ1;
+
+        // 5. 第四个客户端仍然可以获得共享锁
+        String shareLock4 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+        assert StringTools.isNotBlank(shareLock4);
+
+        // 6. 清理所有锁
+        boolean succ2 = getRedisHelper().releaseLock(namespace, key, shareLock2, false);
+        assert succ2;
+        boolean succ3 = getRedisHelper().releaseLock(namespace, key, shareLock3, false);
+        assert succ3;
+        boolean succ4 = getRedisHelper().releaseLock(namespace, key, shareLock4, false);
+        assert succ4;
+    }
+
+    /**
+     * 测试共享锁阻止排它锁
+     */
+    @Test
+    public void testShareLockBlocksExclusiveLock() throws Exception {
+        String key = "shareBlockKey" + UUID.randomUUID();
+
+        // 1. 先获得共享锁
+        String shareLock = getRedisHelper().requireShareLock(namespace, key, 10, false,0);
+        assert StringTools.isNotBlank(shareLock);
+
+        // 2. 尝试获得排它锁，应该失败
+        String exclusiveLock = getRedisHelper().requireLock(namespace, key, 10, false);
+        assert StringTools.isBlank(exclusiveLock);
+
+        // 3. 释放共享锁
+        boolean succ = getRedisHelper().releaseLock(namespace, key, shareLock, false);
+        assert succ;
+
+        // 4. 现在可以获得排它锁
+        String exclusiveLock2 = getRedisHelper().requireLock(namespace, key, 10, false);
+        assert StringTools.isNotBlank(exclusiveLock2);
+
+        // 5. 清理
+        boolean succ2 = getRedisHelper().releaseLock(namespace, key, exclusiveLock2, false);
+        assert succ2;
+    }
+
+    /**
+     * 测试共享锁的续期功能
+     */
+    @Test
+    public void testShareLockRenewal() throws Exception {
+        String key = "renewalShareKey" + UUID.randomUUID();
+
+        // 1. 获得共享锁
+        String shareLock = getRedisHelper().requireShareLock(namespace, key, 5, false, 0);
+        assert StringTools.isNotBlank(shareLock);
+
+        // 2. 等待3秒
+        Thread.sleep(3000);
+
+        // 3. 续期锁
+        boolean renewed = getRedisHelper().renewalLock(namespace, key, shareLock, 10);
+        assert renewed;
+
+        // 4. 再等待3秒，锁应该还在（因为续期到了10秒）
+        Thread.sleep(3000);
+
+        // 5. 释放锁应该成功
+        boolean succ = getRedisHelper().releaseLock(namespace, key, shareLock, false);
+        assert succ;
+    }
+
+    /**
+     * 测试共享锁的可重入功能
+     */
+    @Test
+    public void testShareLockReentrant() throws Exception {
+        String key = "reentrantShareKey" + UUID.randomUUID();
+
+        // 1. 获得共享锁（可重入）
+        String shareLock1 = getRedisHelper().requireShareLock(namespace, key, 10, true, 0);
+        assert StringTools.isNotBlank(shareLock1);
+
+        // 2. 再次获得共享锁（可重入），应该返回相同的uuid
+        String shareLock2 = getRedisHelper().requireShareLock(namespace, key, 10, true, 0);
+        assert StringTools.isNotBlank(shareLock2);
+        assert shareLock1.equals(shareLock2);
+
+        // 3. 第一次释放，应该成功但锁还在
+        boolean succ1 = getRedisHelper().releaseLock(namespace, key, shareLock1, true);
+        assert succ1;
+
+        // 4. 第二次释放，锁才真正释放
+        boolean succ2 = getRedisHelper().releaseLock(namespace, key, shareLock2, true);
+        assert succ2;
+
+        // 5. 第三次释放，应该失败
+        boolean succ3 = getRedisHelper().releaseLock(namespace, key, shareLock1, true);
+        assert !succ3;
+    }
+
+    /**
+     * 测试多线程并发获取共享锁
+     */
+    @Test
+    public void testConcurrentShareLocks() throws Exception {
+        final String key = "concurrentShareKey" + UUID.randomUUID();
+        final int THREAD_COUNT = 5;
+        final int HOLD_TIME = 2000; // 持有锁2秒
+
+        Set<String> acquiredLocks = new ConcurrentSkipListSet<>();
+        List<Thread> threads = new ArrayList<>();
+        AtomicBoolean allAcquired = new AtomicBoolean(true);
+
+        long start = System.currentTimeMillis();
+
+        // 启动多个线程同时获取共享锁
+        for (int i = 0; i < THREAD_COUNT; i++) {
+            Thread thread = new Thread(() -> {
+                String lockUuid = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+                if (lockUuid != null) {
+                    acquiredLocks.add(lockUuid);
+                    try {
+                        Thread.sleep(HOLD_TIME);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    boolean released = getRedisHelper().releaseLock(namespace, key, lockUuid, false);
+                    assert released;
+                } else {
+                    allAcquired.set(false);
+                }
+            });
+            thread.start();
+            threads.add(thread);
+        }
+
+        // 等待所有线程完成
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        long end = System.currentTimeMillis();
+
+        // 验证所有线程都成功获取了锁
+        assert allAcquired.get();
+        assert acquiredLocks.size() == THREAD_COUNT;
+
+        // 验证总时间应该接近HOLD_TIME（因为是并发的），而不是THREAD_COUNT * HOLD_TIME
+        assert (end - start) < HOLD_TIME + 3000; // 预留3秒的误差
+        System.out.println("Concurrent share locks test: " + THREAD_COUNT + " threads completed in " + (end - start) + "ms");
+    }
+
+    /**
+     * 测试共享锁在最后一个客户端释放后，锁被完全删除
+     */
+    @Test
+    public void testShareLockCompleteRelease() throws Exception {
+        String key = "completeReleaseKey" + UUID.randomUUID();
+
+        // 1. 三个客户端获得共享锁
+        String lock1 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+        String lock2 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+        String lock3 = getRedisHelper().requireShareLock(namespace, key, 10, false, 0);
+
+        assert StringTools.isNotBlank(lock1);
+        assert StringTools.isNotBlank(lock2);
+        assert StringTools.isNotBlank(lock3);
+
+        // 2. 释放前两个锁
+        boolean succ1 = getRedisHelper().releaseLock(namespace, key, lock1, false);
+        boolean succ2 = getRedisHelper().releaseLock(namespace, key, lock2, false);
+        assert succ1;
+        assert succ2;
+
+        // 3. 此时排它锁仍然无法获取（因为还有lock3）
+        String exclusiveLock = getRedisHelper().requireLock(namespace, key, 10, false);
+        assert StringTools.isBlank(exclusiveLock);
+
+        // 4. 释放最后一个锁
+        boolean succ3 = getRedisHelper().releaseLock(namespace, key, lock3, false);
+        assert succ3;
+
+        // 5. 现在排它锁可以获取了
+        String exclusiveLock2 = getRedisHelper().requireLock(namespace, key, 10, false);
+        assert StringTools.isNotBlank(exclusiveLock2);
+
+        // 6. 清理
+        boolean succ4 = getRedisHelper().releaseLock(namespace, key, exclusiveLock2, false);
+        assert succ4;
+    }
+
+    /**
+     * 测试共享锁的最大客户端数限制
+     */
+    @Test
+    public void testShareLockMaxClients() throws Exception {
+        String key = "maxClientsKey" + UUID.randomUUID();
+        int maxClients = 3;
+
+        // 1. 前3个客户端应该能成功获取共享锁
+        String lock1 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isNotBlank(lock1);
+
+        String lock2 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isNotBlank(lock2);
+
+        String lock3 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isNotBlank(lock3);
+
+        // 2. 第4个客户端应该无法获取锁（已达到最大客户端数）
+        String lock4 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isBlank(lock4);
+
+        // 3. 释放一个锁
+        boolean succ1 = getRedisHelper().releaseLock(namespace, key, lock1, false);
+        assert succ1;
+
+        // 4. 现在应该可以再获取一个锁
+        String lock5 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isNotBlank(lock5);
+
+        // 5. 再次尝试获取应该失败
+        String lock6 = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+        assert StringTools.isBlank(lock6);
+
+        // 6. 清理所有锁
+        boolean succ2 = getRedisHelper().releaseLock(namespace, key, lock2, false);
+        boolean succ3 = getRedisHelper().releaseLock(namespace, key, lock3, false);
+        boolean succ5 = getRedisHelper().releaseLock(namespace, key, lock5, false);
+        assert succ2;
+        assert succ3;
+        assert succ5;
+    }
+
+    /**
+     * 测试maxClients为0时不限制客户端数
+     */
+    @Test
+    public void testShareLockMaxClientsZero() throws Exception {
+        String key = "maxClientsZeroKey" + UUID.randomUUID();
+        int maxClients = 0; // 0表示不限制
+
+        // 获取多个锁，都应该成功
+        List<String> locks = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            String lock = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+            assert StringTools.isNotBlank(lock);
+            locks.add(lock);
+        }
+
+        // 清理所有锁
+        for (String lock : locks) {
+            boolean succ = getRedisHelper().releaseLock(namespace, key, lock, false);
+            assert succ;
+        }
+    }
+
+    /**
+     * 测试maxClients为负数时按0处理（不限制）
+     */
+    @Test
+    public void testShareLockMaxClientsNegative() throws Exception {
+        String key = "maxClientsNegativeKey" + UUID.randomUUID();
+        int maxClients = -5; // 负数按0处理，不限制
+
+        // 获取多个锁，都应该成功
+        List<String> locks = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            String lock = getRedisHelper().requireShareLock(namespace, key, 10, false, maxClients);
+            assert StringTools.isNotBlank(lock);
+            locks.add(lock);
+        }
+
+        // 清理所有锁
+        for (String lock : locks) {
+            boolean succ = getRedisHelper().releaseLock(namespace, key, lock, false);
+            assert succ;
+        }
+    }
+
 }

@@ -60,6 +60,16 @@ public class RedisSyncParam {
      */
     protected boolean passThroughWhenRedisDown = false;
 
+    /**
+     * @see Synchronized#mode()
+     */
+    protected String mode = "exclusive";
+
+    /**
+     * @see Synchronized#maxShareClients()
+     */
+    protected int maxShareClients = 0;
+
     // #########################
 
     /**
