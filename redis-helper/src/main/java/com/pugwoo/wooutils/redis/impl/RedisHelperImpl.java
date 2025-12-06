@@ -243,13 +243,28 @@ public class RedisHelperImpl implements RedisHelper {
 		return setString(key, expireSecond, v);
 	}
 
-	@Override
-	public boolean setStringIfNotExist(String key, int expireSecond, String value) {
-		if(value == null) { // null值不需要设置
-			return true;
-		}
-		return execute(jedis -> JedisVersionCompatible.setStringIfNotExist(jedis, key, expireSecond, value));
-	}
+    @Override
+    public boolean setStringIfNotExist(String key, int expireSecond, String value) {
+        if(value == null) { // null值不需要设置
+            return true;
+        }
+        return execute(jedis -> {
+            try {
+                // 直接执行Redis命令: SET key value NX EX seconds
+                // 这样可以避免jedis不同版本的set方法参数变化问题
+                Object result = jedis.sendCommand(Protocol.Command.SET, key, value, "NX", "EX", String.valueOf(expireSecond));
+                // sendCommand返回的是byte[]，需要转换为String来判断
+                if (result instanceof byte[]) {
+                    String strResult = new String((byte[]) result);
+                    return "OK".equals(strResult);
+                }
+                return result != null && "OK".equals(result.toString());
+            } catch (Exception e) {
+                LOGGER.error("setStringIfNotExist error, key:{}, value:{}", key, value, e);
+                return false;
+            }
+        });
+    }
 
 	@Override
 	public boolean setExpire(String key, int expireSecond) {
