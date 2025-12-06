@@ -19,8 +19,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class JedisVersionCompatible {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(JedisVersionCompatible.class);
-
     private static final int jedisVersion = getJedisVersion();
 
     /**
@@ -47,89 +45,6 @@ public class JedisVersionCompatible {
         }
         return 0;
     }
-
-    // 标识现在运行的程序用的是哪个jedis版本, 2.x == 2, 3.x == 3, 4.x = 4
-    @Deprecated
-    private static final AtomicInteger jedisVer = new AtomicInteger(0);
-
-    // START of setStringIfNotExist
-
-    public static boolean setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
-        try {
-            if (jedisVersion == 2) {
-                return v2_setStringIfNotExist(jedis, key, expireSecond, value);
-            } else if (jedisVersion >= 3 && jedisVersion <= 5) {
-                return v3v4v5_setStringIfNotExist(jedis, key, expireSecond, value);
-            } else {
-                return v6_setStringIfNotExist(jedis, key, expireSecond, value);
-            }
-        } catch (Exception e) {
-            LOGGER.error("operate jedis error, key:{}, value:{}", key, value, e);
-            return false;
-        }
-    }
-
-    private static final ExecutableAccessor compiledSetStringIfNotExist = (ExecutableAccessor) MVEL.compileExpression(
-            "jedis.set(key, value, \"NX\", \"EX\", expireSecond)");
-
-    private static boolean v2_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("key", key);
-        params.put("value", value);
-        params.put("expireSecond", expireSecond);
-        params.put("jedis", jedis);
-
-        Object result = MVEL.executeExpression(compiledSetStringIfNotExist, params); // 该方式对性能几乎没有影响
-        return result != null && "OK".equals(result.toString());
-    }
-
-    // 在静态块中只查一次 Method
-    private static final Method SET_PARAMS_EX_LONG;
-    private static final Method SET_PARAMS_EX_INT;
-
-    static {
-        Method m = null;
-        try {
-            m = SetParams.class.getMethod("ex", long.class);
-        } catch (Throwable ignored) {}
-        SET_PARAMS_EX_LONG = m;
-
-        try {
-            m = SetParams.class.getMethod("ex", int.class);
-        } catch (Throwable ignored) {}
-        SET_PARAMS_EX_INT = m;
-    }
-
-    private static boolean v3v4v5_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
-        SetParams setParams = new SetParams();
-        setParams.nx();
-
-        try {
-            if (SET_PARAMS_EX_LONG != null) {
-                SET_PARAMS_EX_LONG.invoke(setParams, (long) expireSecond);
-            } else if (SET_PARAMS_EX_INT != null) {
-                SET_PARAMS_EX_INT.invoke(setParams, expireSecond);
-            } else {
-                throw new RuntimeException("SetParams.ex() not found");
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        String result = jedis.set(key, value, setParams);
-        return "OK".equals(result);
-    }
-
-    private static boolean v6_setStringIfNotExist(Jedis jedis, String key, int expireSecond, String value) {
-        SetParams setParams = new SetParams();
-        setParams.nx();
-        setParams.ex(expireSecond);
-        String result = jedis.set(key, value, setParams);
-        return "OK".equals(result);
-    }
-
-
-    // END of setStringIfNotExist
 
     // START of setString
 
