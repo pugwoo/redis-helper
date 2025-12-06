@@ -231,7 +231,21 @@ public class RedisHelperImpl implements RedisHelper {
 		if(value == null) { // null值不需要设置
 			return true;
 		}
-		return execute(jedis -> JedisVersionCompatible.setString(jedis, key, expireSecond, value));
+		return execute(jedis -> {
+			try {
+				// 直接执行Redis命令: SETEX key seconds value
+				// 这样可以避免jedis不同版本的setex方法参数变化问题
+				Object result = jedis.sendCommand(Protocol.Command.SETEX, key, String.valueOf(expireSecond), value);
+				if (result instanceof byte[]) {
+					String strResult = new String((byte[]) result);
+					return "OK".equals(strResult);
+				}
+				return result != null && "OK".equals(result.toString());
+			} catch (Exception e) {
+				LOGGER.error("setString error, key:{}, value:{}", key, value, e);
+				return false;
+			}
+		});
 	}
 	
 	@Override
