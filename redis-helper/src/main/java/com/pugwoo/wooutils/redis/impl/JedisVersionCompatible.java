@@ -46,55 +46,6 @@ public class JedisVersionCompatible {
         return 0;
     }
 
-    // START of setString
-
-    public static boolean setString(Jedis jedis, String key, int expireSecond, String value) {
-        if (jedisVersion >= 2 && jedisVersion <= 3) {
-            return v2v3_setString(jedis, key, expireSecond, value);
-        } else {
-            return v4v5v6_setString(jedis, key, expireSecond, value);
-        }
-    }
-
-    private static final Method JEDIS_SET_EX_LONG;
-    private static final Method JEDIS_SET_EX_INT;
-
-    static {
-        Method m = null;
-        try {
-            m = Jedis.class.getMethod("setex", String.class, long.class, String.class);
-        } catch (Throwable ignored) {}
-        JEDIS_SET_EX_LONG = m;
-
-        try {
-            m = Jedis.class.getMethod("setex", String.class, int.class, String.class);
-        } catch (Throwable ignored) {}
-        JEDIS_SET_EX_INT = m;
-    }
-
-    private static boolean v2v3_setString(Jedis jedis, String key, int expireSecond, String value) {
-        try {
-            if (JEDIS_SET_EX_LONG != null) {
-                Object result = JEDIS_SET_EX_LONG.invoke(jedis, key, (long) expireSecond, value);
-                return result != null && "OK".equals(result.toString());
-            } else if (JEDIS_SET_EX_INT != null) {
-                Object result = JEDIS_SET_EX_INT.invoke(jedis, key, expireSecond, value);
-                return result != null && "OK".equals(result.toString());
-            } else {
-                throw new RuntimeException("Jedis.setex(key,expireSecond,value) not found");
-            }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static boolean v4v5v6_setString(Jedis jedis, String key, long expireSecond, String value) {
-        String str = jedis.setex(key, expireSecond, value);
-        return "OK".equals(str);
-    }
-
-    // END of setString
-
     // START of getExpireSecond
 
     public static long getExpireSecond(Jedis jedis, String key) {
