@@ -423,9 +423,11 @@ public class RedisHelperImpl implements RedisHelper {
 	public boolean remove(String key) {
 		return execute(jedis -> {
 			try {
-				return JedisVersionCompatible.remove(jedis, key);
+				// 直接执行Redis命令: DEL key
+				jedis.sendCommand(Protocol.Command.DEL, key);
+				return true; // 不管key是否存在，remove都认为是成功
 			} catch (Exception e) {
-				LOGGER.error("operate jedis error, key:{}", key, e);
+				LOGGER.error("remove error, key:{}", key, e);
 				return false;
 			}
 		});

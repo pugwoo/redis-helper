@@ -5,6 +5,7 @@ import com.pugwoo.wooutils.redis.RedisMsg;
 import com.pugwoo.wooutils.redis.RedisQueueStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.Protocol;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -228,7 +229,8 @@ public class RedisMsgQueue {
             } else {
                 _redisMsg.setConsumeCount(_redisMsg.getConsumeCount() + 1);
             }
-            JedisVersionCompatible.hset(jedis, mapKey, uuid, JsonRedisObjectConverter.toJson(_redisMsg));
+            // 直接执行Redis命令: HSET key field value
+            jedis.sendCommand(Protocol.Command.HSET, mapKey, uuid, JsonRedisObjectConverter.toJson(_redisMsg));
 
             return _redisMsg;
         });
@@ -304,8 +306,21 @@ public class RedisMsgQueue {
         String doingKey = getDoingKey(topic);
 
         RedisQueueStatus status = new RedisQueueStatus();
-        Long pendingLen = redisHelper.execute(jedis -> JedisVersionCompatible.llen(jedis, pendingKey));
-        Long doingLen = redisHelper.execute(jedis -> JedisVersionCompatible.llen(jedis, doingKey));
+        // 直接执行Redis命令: LLEN key
+        Long pendingLen = redisHelper.execute(jedis -> {
+            Object result = jedis.sendCommand(Protocol.Command.LLEN, pendingKey);
+            if (result == null) {
+                return null;
+            }
+            return result instanceof Long ? (Long) result : ((Number) result).longValue();
+        });
+        Long doingLen = redisHelper.execute(jedis -> {
+            Object result = jedis.sendCommand(Protocol.Command.LLEN, doingKey);
+            if (result == null) {
+                return null;
+            }
+            return result instanceof Long ? (Long) result : ((Number) result).longValue();
+        });
 
         status.setPendingCount(pendingLen == null ? 0 : pendingLen.intValue());
         status.setDoingCount(doingLen == null ? 0 : doingLen.intValue());
@@ -431,7 +446,8 @@ public class RedisMsgQueue {
                 return;
             }
             topics.put(topic, "");
-            redisHelper.execute(jedis -> JedisVersionCompatible.sadd(jedis, REDIS_MSG_QUEUE_TOPICS_KEY, topic));
+            // 直接执行Redis命令: SADD key member
+            redisHelper.execute(jedis -> jedis.sendCommand(Protocol.Command.SADD, REDIS_MSG_QUEUE_TOPICS_KEY, topic));
         }
 
         /**清理过期消息，返回true表示有消费时间为null的情况，已经睡眠了10秒去清理了；返回false则表示没有*/
