@@ -126,7 +126,8 @@ public class RedisHelperImpl implements RedisHelper {
 			if(jedis == null) {
 				return false;
 			}
-			jedis.get("a"); // 随便拿一个值测下，没抛异常则表示成功
+			// 直接执行Redis命令: GET key，随便拿一个值测下，没抛异常则表示成功
+			jedis.sendCommand(Protocol.Command.GET, "a");
 			return true;
 		} catch (Exception e) {
 			LOGGER.error("check redis isOk fail", e);
@@ -209,7 +210,8 @@ public class RedisHelperImpl implements RedisHelper {
 
 		return execute(jedis -> {
 			try {
-				jedis.rename(oldKey, newKey);
+				// 直接执行Redis命令: RENAME oldkey newkey
+				jedis.sendCommand(Protocol.Command.RENAME, oldKey, newKey);
 				return true;
 			} catch (Exception e) {
 				LOGGER.error("rename operate jedis error, oldKey:{}, newKey:{}", oldKey, newKey, e);
@@ -318,8 +320,15 @@ public class RedisHelperImpl implements RedisHelper {
 	public String getString(String key) {
 		return execute(jedis -> {
 			try {
-				String str = jedis.get(key);
-				return str;
+				// 直接执行Redis命令: GET key
+				Object result = jedis.sendCommand(Protocol.Command.GET, key);
+				if (result == null) {
+					return null;
+				}
+				if (result instanceof byte[]) {
+					return new String((byte[]) result);
+				}
+				return result.toString();
 			} catch (Exception e) {
 				LOGGER.error("operate jedis error, key:{}", key, e);
 				return null;
@@ -371,10 +380,26 @@ public class RedisHelperImpl implements RedisHelper {
 		if(keys == null || keys.isEmpty()) {
 			return new ArrayList<>();
 		}
-		
+
 		return execute(jedis -> {
 			try {
-				List<String> strs = jedis.mget(keys.toArray(new String[0]));
+				// 直接执行Redis命令: MGET key [key ...]
+				Object result = jedis.sendCommand(Protocol.Command.MGET, keys.toArray(new String[0]));
+				if (result == null) {
+					return null;
+				}
+				List<String> strs = new ArrayList<>();
+				if (result instanceof List) {
+					for (Object item : (List<?>) result) {
+						if (item == null) {
+							strs.add(null);
+						} else if (item instanceof byte[]) {
+							strs.add(new String((byte[]) item));
+						} else {
+							strs.add(item.toString());
+						}
+					}
+				}
 				return strs;
 			} catch (Exception e) {
 				LOGGER.error("operate jedis error, keys:{}", keys, e);
