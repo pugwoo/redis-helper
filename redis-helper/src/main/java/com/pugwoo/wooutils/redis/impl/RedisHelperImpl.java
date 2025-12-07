@@ -284,9 +284,11 @@ public class RedisHelperImpl implements RedisHelper {
 	public boolean setExpire(String key, int expireSecond) {
 		return execute(jedis -> {
 			try {
-				return JedisVersionCompatible.setExpire(jedis, key, expireSecond);
+				// 直接执行Redis命令: EXPIRE key seconds
+				jedis.sendCommand(Protocol.Command.EXPIRE, key, String.valueOf(expireSecond));
+				return true; // 即使key不存在，也认为是true
 			} catch (Exception e) {
-				LOGGER.error("operate jedis error, key:{}", key, e);
+				LOGGER.error("setExpire error, key:{}", key, e);
 				return false;
 			}
 		});

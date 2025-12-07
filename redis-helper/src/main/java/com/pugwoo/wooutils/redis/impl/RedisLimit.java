@@ -5,6 +5,7 @@ import com.pugwoo.wooutils.redis.RedisLimitParam;
 import com.pugwoo.wooutils.redis.RedisLimitPeriodEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.Protocol;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -83,7 +84,8 @@ public class RedisLimit {
 				}
 				
 				if(retVal == count && limitParam.getLimitPeriod().getExpireSecond() >= 0) {
-					JedisVersionCompatible.setExpire(jedis, fkey, limitParam.getLimitPeriod().getExpireSecond());
+                    // 直接执行Redis命令: EXPIRE key seconds
+                    jedis.sendCommand(Protocol.Command.EXPIRE, fkey, String.valueOf(limitParam.getLimitPeriod().getExpireSecond()));
 				}
 				
 				if(retVal <= limitParam.getLimitCount()) {
