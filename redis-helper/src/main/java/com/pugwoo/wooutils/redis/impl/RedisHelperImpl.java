@@ -296,9 +296,17 @@ public class RedisHelperImpl implements RedisHelper {
 	public long getExpireSecond(String key) {
 		return execute(jedis -> {
 			try {
-				return JedisVersionCompatible.getExpireSecond(jedis, key);
+				// 直接执行Redis命令: TTL key
+				Object result = jedis.sendCommand(Protocol.Command.TTL, key);
+				if (result instanceof Long) {
+					return (Long) result;
+				} else if (result instanceof Number) {
+					return ((Number) result).longValue();
+				} else {
+					throw new RuntimeException("TTL command return is not a number, result:" + result);
+				}
 			} catch (Exception e) {
-				LOGGER.error("operate jedis error, key:{}", key, e);
+				LOGGER.error("getExpireSecond error, key:{}", key, e);
 				return -999L;
 			}
 		});
