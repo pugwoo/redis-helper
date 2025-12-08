@@ -126,7 +126,8 @@ public class RedisHelperImpl implements RedisHelper {
 			if(jedis == null) {
 				return false;
 			}
-			jedis.get("a"); // 随便拿一个值测下，没抛异常则表示成功
+			// 直接执行Redis命令: GET key，随便拿一个值测下，没抛异常则表示成功
+			jedis.sendCommand(Protocol.Command.GET, "a");
 			return true;
 		} catch (Exception e) {
 			LOGGER.error("check redis isOk fail", e);
@@ -209,7 +210,8 @@ public class RedisHelperImpl implements RedisHelper {
 
 		return execute(jedis -> {
 			try {
-				jedis.rename(oldKey, newKey);
+				// 直接执行Redis命令: RENAME oldkey newkey
+				jedis.sendCommand(Protocol.Command.RENAME, oldKey, newKey);
 				return true;
 			} catch (Exception e) {
 				LOGGER.error("rename operate jedis error, oldKey:{}, newKey:{}", oldKey, newKey, e);
@@ -231,7 +233,21 @@ public class RedisHelperImpl implements RedisHelper {
 		if(value == null) { // null值不需要设置
 			return true;
 		}
-		return execute(jedis -> JedisVersionCompatible.setString(jedis, key, expireSecond, value));
+		return execute(jedis -> {
+			try {
+				// 直接执行Redis命令: SETEX key seconds value
+				// 这样可以避免jedis不同版本的setex方法参数变化问题
+				Object result = jedis.sendCommand(Protocol.Command.SETEX, key, String.valueOf(expireSecond), value);
+				if (result instanceof byte[]) {
+					String strResult = new String((byte[]) result);
+					return "OK".equals(strResult);
+				}
+				return result != null && "OK".equals(result.toString());
+			} catch (Exception e) {
+				LOGGER.error("setString error, key:{}, value:{}", key, value, e);
+				return false;
+			}
+		});
 	}
 	
 	@Override
@@ -243,21 +259,38 @@ public class RedisHelperImpl implements RedisHelper {
 		return setString(key, expireSecond, v);
 	}
 
-	@Override
-	public boolean setStringIfNotExist(String key, int expireSecond, String value) {
-		if(value == null) { // null值不需要设置
-			return true;
-		}
-		return execute(jedis -> JedisVersionCompatible.setStringIfNotExist(jedis, key, expireSecond, value));
-	}
+    @Override
+    public boolean setStringIfNotExist(String key, int expireSecond, String value) {
+        if(value == null) { // null值不需要设置
+            return true;
+        }
+        return execute(jedis -> {
+            try {
+                // 直接执行Redis命令: SET key value NX EX seconds
+                // 这样可以避免jedis不同版本的set方法参数变化问题
+                Object result = jedis.sendCommand(Protocol.Command.SET, key, value, "NX", "EX", String.valueOf(expireSecond));
+                // sendCommand返回的是byte[]，需要转换为String来判断
+                if (result instanceof byte[]) {
+                    String strResult = new String((byte[]) result);
+                    return "OK".equals(strResult);
+                }
+                return result != null && "OK".equals(result.toString());
+            } catch (Exception e) {
+                LOGGER.error("setStringIfNotExist error, key:{}, value:{}", key, value, e);
+                return false;
+            }
+        });
+    }
 
 	@Override
 	public boolean setExpire(String key, int expireSecond) {
 		return execute(jedis -> {
 			try {
-				return JedisVersionCompatible.setExpire(jedis, key, expireSecond);
+				// 直接执行Redis命令: EXPIRE key seconds
+				jedis.sendCommand(Protocol.Command.EXPIRE, key, String.valueOf(expireSecond));
+				return true; // 即使key不存在，也认为是true
 			} catch (Exception e) {
-				LOGGER.error("operate jedis error, key:{}", key, e);
+				LOGGER.error("setExpire error, key:{}", key, e);
 				return false;
 			}
 		});
@@ -267,9 +300,17 @@ public class RedisHelperImpl implements RedisHelper {
 	public long getExpireSecond(String key) {
 		return execute(jedis -> {
 			try {
-				return JedisVersionCompatible.getExpireSecond(jedis, key);
+				// 直接执行Redis命令: TTL key
+				Object result = jedis.sendCommand(Protocol.Command.TTL, key);
+				if (result instanceof Long) {
+					return (Long) result;
+				} else if (result instanceof Number) {
+					return ((Number) result).longValue();
+				} else {
+					throw new RuntimeException("TTL command return is not a number, result:" + result);
+				}
 			} catch (Exception e) {
-				LOGGER.error("operate jedis error, key:{}", key, e);
+				LOGGER.error("getExpireSecond error, key:{}", key, e);
 				return -999L;
 			}
 		});
@@ -279,8 +320,15 @@ public class RedisHelperImpl implements RedisHelper {
 	public String getString(String key) {
 		return execute(jedis -> {
 			try {
-				String str = jedis.get(key);
-				return str;
+				// 直接执行Redis命令: GET key
+				Object result = jedis.sendCommand(Protocol.Command.GET, key);
+				if (result == null) {
+					return null;
+				}
+				if (result instanceof byte[]) {
+					return new String((byte[]) result);
+				}
+				return result.toString();
 			} catch (Exception e) {
 				LOGGER.error("operate jedis error, key:{}", key, e);
 				return null;
@@ -332,10 +380,26 @@ public class RedisHelperImpl implements RedisHelper {
 		if(keys == null || keys.isEmpty()) {
 			return new ArrayList<>();
 		}
-		
+
 		return execute(jedis -> {
 			try {
-				List<String> strs = jedis.mget(keys.toArray(new String[0]));
+				// 直接执行Redis命令: MGET key [key ...]
+				Object result = jedis.sendCommand(Protocol.Command.MGET, keys.toArray(new String[0]));
+				if (result == null) {
+					return null;
+				}
+				List<String> strs = new ArrayList<>();
+				if (result instanceof List) {
+					for (Object item : (List<?>) result) {
+						if (item == null) {
+							strs.add(null);
+						} else if (item instanceof byte[]) {
+							strs.add(new String((byte[]) item));
+						} else {
+							strs.add(item.toString());
+						}
+					}
+				}
 				return strs;
 			} catch (Exception e) {
 				LOGGER.error("operate jedis error, keys:{}", keys, e);
@@ -384,9 +448,11 @@ public class RedisHelperImpl implements RedisHelper {
 	public boolean remove(String key) {
 		return execute(jedis -> {
 			try {
-				return JedisVersionCompatible.remove(jedis, key);
+				// 直接执行Redis命令: DEL key
+				jedis.sendCommand(Protocol.Command.DEL, key);
+				return true; // 不管key是否存在，remove都认为是成功
 			} catch (Exception e) {
-				LOGGER.error("operate jedis error, key:{}", key, e);
+				LOGGER.error("remove error, key:{}", key, e);
 				return false;
 			}
 		});

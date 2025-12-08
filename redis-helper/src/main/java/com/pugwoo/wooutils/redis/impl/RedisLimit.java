@@ -5,6 +5,7 @@ import com.pugwoo.wooutils.redis.RedisLimitParam;
 import com.pugwoo.wooutils.redis.RedisLimitPeriodEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.Protocol;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -71,28 +72,39 @@ public class RedisLimit {
 			try {
 				Long retVal = null;
 				if(count == 1) {
-					retVal = JedisVersionCompatible.incr(jedis, fkey);
+					// 直接执行Redis命令: INCR key
+					Object result = jedis.sendCommand(Protocol.Command.INCR, fkey);
+                    if (result != null) {
+                        retVal = result instanceof Long ? (Long) result : ((Number) result).longValue();
+                    }
 				} else {
-					retVal = JedisVersionCompatible.incrBy(jedis, fkey, count);
+					// 直接执行Redis命令: INCRBY key increment
+					Object result = jedis.sendCommand(Protocol.Command.INCRBY, fkey, String.valueOf(count));
+                    if (result != null) {
+                        retVal = result instanceof Long ? (Long) result : ((Number) result).longValue();
+                    }
 				}
-				
+
 				if(retVal == null) {
 					LOGGER.error("useLimitCount fail,namespace:{},key:{},count:{},ret is null",
 							limitParam.getNamespace(), fkey, count);
 					return -1L;
 				}
-				
+
 				if(retVal == count && limitParam.getLimitPeriod().getExpireSecond() >= 0) {
-					JedisVersionCompatible.setExpire(jedis, fkey, limitParam.getLimitPeriod().getExpireSecond());
+                    // 直接执行Redis命令: EXPIRE key seconds
+                    jedis.sendCommand(Protocol.Command.EXPIRE, fkey, String.valueOf(limitParam.getLimitPeriod().getExpireSecond()));
 				}
-				
+
 				if(retVal <= limitParam.getLimitCount()) {
 					return retVal;
 				} else {
 					if(count == 1) { // 还原现场
-						JedisVersionCompatible.decr(jedis, fkey);
+						// 直接执行Redis命令: DECR key
+						jedis.sendCommand(Protocol.Command.DECR, fkey);
 					} else {
-						JedisVersionCompatible.decrBy(jedis, fkey, count);
+						// 直接执行Redis命令: DECRBY key decrement
+						jedis.sendCommand(Protocol.Command.DECRBY, fkey, String.valueOf(count));
 					}
 					return -1L; // 已经超额
 				}

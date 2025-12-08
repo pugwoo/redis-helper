@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.pugwoo.wooutils.redis.RedisHelper;
+import redis.clients.jedis.Protocol;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +36,12 @@ public class RedisAutoIncrementId {
 			try {
 				String key = namespace + "_ID";
 				if (expireSeconds <= 0) {
-					return jedis.incr(key);
+					// 直接执行Redis命令: INCR key
+					Object result = jedis.sendCommand(Protocol.Command.INCR, key);
+                    if (result == null) {
+                        return null;
+                    }
+					return result instanceof Long ? (Long) result : ((Number) result).longValue();
 				} else {
 					Object eval = jedis.eval(INCR_AND_EXPIRE_SCRIPT, 1, key, String.valueOf(expireSeconds));
 					if (eval == null) {
@@ -62,7 +68,12 @@ public class RedisAutoIncrementId {
 			try {
 				String key = namespace + "_ID";
 				if (expireSeconds <= 0) {
-					return jedis.incrBy(key, batchNum);
+					// 直接执行Redis命令: INCRBY key increment
+					Object result = jedis.sendCommand(Protocol.Command.INCRBY, key, String.valueOf(batchNum));
+                    if (result == null) {
+                        return null;
+                    }
+					return result instanceof Long ? (Long) result : ((Number) result).longValue();
 				} else {
 					Object eval = jedis.eval(INCR_BY_AND_EXPIRE_SCRIPT, 1, key, String.valueOf(batchNum), String.valueOf(expireSeconds));
 					if (eval == null) {

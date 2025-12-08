@@ -5,6 +5,7 @@ import com.pugwoo.wooutils.redis.RedisMsg;
 import com.pugwoo.wooutils.redis.RedisQueueStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.Protocol;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -197,8 +198,15 @@ public class RedisMsgQueue {
         RedisMsg redisMsg = redisHelper.execute(jedis -> {
             String uuid = null;
             if(waitTimeoutSec == 0) {
-                uuid = jedis.rpoplpush(listKey, doingKey);
+                // 直接执行Redis命令: RPOPLPUSH source destination
+                Object result = jedis.sendCommand(Protocol.Command.RPOPLPUSH, listKey, doingKey);
+                if (result instanceof byte[]) {
+                    uuid = new String((byte[]) result);
+                } else if (result != null) {
+                    uuid = result.toString();
+                }
             } else {
+                // sendBlockingCommand is not support in lower version jedis
                 uuid = jedis.brpoplpush(listKey, doingKey, waitTimeoutSec < 0 ? 0 : waitTimeoutSec);
             }
 
@@ -206,10 +214,19 @@ public class RedisMsgQueue {
                 return null;
             }
 
-            String msgJson = jedis.hget(mapKey, uuid);
+            // 直接执行Redis命令: HGET key field
+            Object hgetResult = jedis.sendCommand(Protocol.Command.HGET, mapKey, uuid);
+            String msgJson = null;
+            if (hgetResult instanceof byte[]) {
+                msgJson = new String((byte[]) hgetResult);
+            } else if (hgetResult != null) {
+                msgJson = hgetResult.toString();
+            }
             if(msgJson == null || msgJson.isEmpty()) {
                 // 说明消息已经被消费了，清理掉uuid即可
-                long removedCount = jedis.lrem(doingKey, 0, uuid);
+                // 直接执行Redis命令: LREM key count element
+                Object lremResult = jedis.sendCommand(Protocol.Command.LREM, doingKey, "0", uuid);
+                long removedCount = lremResult instanceof Long ? (Long) lremResult : ((Number) lremResult).longValue();
                 if (removedCount > 0) {
                     LOGGER.warn("get uuid:{} msg fail, msg is empty, this msg uuid has been removed.", uuid);
                 }
@@ -228,7 +245,8 @@ public class RedisMsgQueue {
             } else {
                 _redisMsg.setConsumeCount(_redisMsg.getConsumeCount() + 1);
             }
-            JedisVersionCompatible.hset(jedis, mapKey, uuid, JsonRedisObjectConverter.toJson(_redisMsg));
+            // 直接执行Redis命令: HSET key field value
+            jedis.sendCommand(Protocol.Command.HSET, mapKey, uuid, JsonRedisObjectConverter.toJson(_redisMsg));
 
             return _redisMsg;
         });
@@ -304,8 +322,21 @@ public class RedisMsgQueue {
         String doingKey = getDoingKey(topic);
 
         RedisQueueStatus status = new RedisQueueStatus();
-        Long pendingLen = redisHelper.execute(jedis -> JedisVersionCompatible.llen(jedis, pendingKey));
-        Long doingLen = redisHelper.execute(jedis -> JedisVersionCompatible.llen(jedis, doingKey));
+        // 直接执行Redis命令: LLEN key
+        Long pendingLen = redisHelper.execute(jedis -> {
+            Object result = jedis.sendCommand(Protocol.Command.LLEN, pendingKey);
+            if (result == null) {
+                return null;
+            }
+            return result instanceof Long ? (Long) result : ((Number) result).longValue();
+        });
+        Long doingLen = redisHelper.execute(jedis -> {
+            Object result = jedis.sendCommand(Protocol.Command.LLEN, doingKey);
+            if (result == null) {
+                return null;
+            }
+            return result instanceof Long ? (Long) result : ((Number) result).longValue();
+        });
 
         status.setPendingCount(pendingLen == null ? 0 : pendingLen.intValue());
         status.setDoingCount(doingLen == null ? 0 : doingLen.intValue());
@@ -319,7 +350,16 @@ public class RedisMsgQueue {
     private static RedisMsg getMsg(RedisHelper redisHelper, String topic, String uuid) {
         String mapKey = getMapKey(topic);
 
-        String json = redisHelper.execute(jedis -> jedis.hget(mapKey, uuid));
+        // 直接执行Redis命令: HGET key field
+        String json = redisHelper.execute(jedis -> {
+            Object result = jedis.sendCommand(Protocol.Command.HGET, mapKey, uuid);
+            if (result instanceof byte[]) {
+                return new String((byte[]) result);
+            } else if (result != null) {
+                return result.toString();
+            }
+            return null;
+        });
         if(json == null || json.isEmpty()) {
             return null;
         }
@@ -334,15 +374,34 @@ public class RedisMsgQueue {
         String mapKey = getMapKey(topic);
 
         List<RedisMsg> expireMsg  = redisHelper.execute(jedis -> {
-            List<String> uuidList = jedis.lrange(doingKey, 0, -1);
+            // 直接执行Redis命令: LRANGE key start stop
+            Object lrangeResult = jedis.sendCommand(Protocol.Command.LRANGE, doingKey, "0", "-1");
+            List<String> uuidList = new ArrayList<>();
+            if (lrangeResult instanceof List) {
+                for (Object item : (List<?>) lrangeResult) {
+                    if (item instanceof byte[]) {
+                        uuidList.add(new String((byte[]) item));
+                    } else if (item != null) {
+                        uuidList.add(item.toString());
+                    }
+                }
+            }
 
             List<RedisMsg> _expireMsg = new ArrayList<>();
 
             for(String uuid : uuidList) {
-                String json = jedis.hget(mapKey, uuid);
+                // 直接执行Redis命令: HGET key field
+                Object hgetResult = jedis.sendCommand(Protocol.Command.HGET, mapKey, uuid);
+                String json = null;
+                if (hgetResult instanceof byte[]) {
+                    json = new String((byte[]) hgetResult);
+                } else if (hgetResult != null) {
+                    json = hgetResult.toString();
+                }
                 if(json == null || json.isEmpty()) {
                     // 清理不存在消息体的doing uuid
-                    jedis.lrem(doingKey, 0, uuid);
+                    // 直接执行Redis命令: LREM key count element
+                    jedis.sendCommand(Protocol.Command.LREM, doingKey, "0", uuid);
                     LOGGER.warn("topic:{}, clear not exist DOING msg uuid:{}", topic, uuid);
                     continue;
                 }
@@ -372,7 +431,8 @@ public class RedisMsgQueue {
         // 获取消息信息，如果为null，表示消息不存在
         RedisMsg redisMsg = getMsg(redisHelper, topic, uuid);
         if (redisMsg == null) {
-            redisHelper.execute(jedis -> jedis.lrem(doingKey, 0, uuid));
+            // 直接执行Redis命令: LREM key count element
+            redisHelper.execute(jedis -> jedis.sendCommand(Protocol.Command.LREM, doingKey, "0", uuid));
             // 不要移除pendingKey中的uuid，当消息堆积时，移除的时间复杂度是O(N)，堆积消息达到百万级别时，此命令会非常慢
             //redisHelper.execute(jedis -> jedis.eval(
             //        "redis.call('LREM', KEYS[1], 0, ARGV[1]); redis.call('LREM', KEYS[2], 0, ARGV[1]); ",
@@ -431,14 +491,29 @@ public class RedisMsgQueue {
                 return;
             }
             topics.put(topic, "");
-            redisHelper.execute(jedis -> JedisVersionCompatible.sadd(jedis, REDIS_MSG_QUEUE_TOPICS_KEY, topic));
+            // 直接执行Redis命令: SADD key member
+            redisHelper.execute(jedis -> jedis.sendCommand(Protocol.Command.SADD, REDIS_MSG_QUEUE_TOPICS_KEY, topic));
         }
 
         /**清理过期消息，返回true表示有消费时间为null的情况，已经睡眠了10秒去清理了；返回false则表示没有*/
         private boolean doClean() {
             Map<String, List<String>> waitToClear = new HashMap<>(); // 等待清理的topic -> 消息uuid列表
 
-            Set<String> topicsInRedis = redisHelper.execute(jedis -> jedis.smembers(REDIS_MSG_QUEUE_TOPICS_KEY));
+            // 直接执行Redis命令: SMEMBERS key
+            Set<String> topicsInRedis = redisHelper.execute(jedis -> {
+                Object result = jedis.sendCommand(Protocol.Command.SMEMBERS, REDIS_MSG_QUEUE_TOPICS_KEY);
+                Set<String> members = new HashSet<>();
+                if (result instanceof List) {
+                    for (Object item : (List<?>) result) {
+                        if (item instanceof byte[]) {
+                            members.add(new String((byte[]) item));
+                        } else if (item != null) {
+                            members.add(item.toString());
+                        }
+                    }
+                }
+                return members;
+            });
             // 同步一下，如果topicsInRedis中没有但是本地有，则本地删除掉
             for(String t : topics.keySet()) {
                 if (!topicsInRedis.contains(t)) {
