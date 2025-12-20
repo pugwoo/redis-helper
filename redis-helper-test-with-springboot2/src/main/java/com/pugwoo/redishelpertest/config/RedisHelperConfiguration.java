@@ -2,6 +2,7 @@ package com.pugwoo.redishelpertest.config;
 
 import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
 import com.pugwoo.redishelpertest.ratelimit.RateLimitService;
+import com.pugwoo.redishelpertest.receivemsg.ReceiveMsgTestService;
 import com.pugwoo.redishelpertest.redis.sync.HeartbeatTestService;
 import com.pugwoo.redishelpertest.redis.sync.HelloService;
 import com.pugwoo.redishelpertest.redis.sync.HelloServiceWithMutilLock;
@@ -9,6 +10,7 @@ import com.pugwoo.redishelpertest.redis.sync.LockModeTestService;
 import com.pugwoo.redishelpertest.redis.sync.ThrowIfNotGetLockTestService;
 import com.pugwoo.redishelpertest.sendmsg.SendMsgTestService;
 import com.pugwoo.wooutils.cache.HiSpeedCacheAspect;
+import com.pugwoo.wooutils.redis.ReceiveMsgProcessor;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.RedisLimitAspect;
 import com.pugwoo.wooutils.redis.RedisSyncAspect;
@@ -96,6 +98,16 @@ public class RedisHelperConfiguration {
     @Bean
     public SendMsgTestService sendMsgTestService() {
         return new SendMsgTestService();
+    }
+
+    @Bean
+    public ReceiveMsgProcessor receiveMsgProcessor() {
+        return new ReceiveMsgProcessor();
+    }
+
+    @Bean
+    public ReceiveMsgTestService receiveMsgTestService() {
+        return new ReceiveMsgTestService();
     }
 
 }

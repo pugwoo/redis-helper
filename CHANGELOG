@@ -1,5 +1,6 @@
 
 v1.6.3 - [add] 增加@SendMsg注解，用于在方法成功返回后自动发送消息到Redis消息队列
+       - [add] 增加@ReceiveMsg注解，用于自动接收和处理Redis消息队列中的消息
 
 2025年12月8日
 v1.6.2 - [enhance] 优化对jedis各版本的兼容性，支持最新的7.x版本jedis
