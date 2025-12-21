@@ -1,4 +1,4 @@
-
+2025年12月21日
 v1.7.0 - [add] 增加@SendMsg注解，用于在方法成功返回后自动发送消息到Redis消息队列
        - [add] 增加@ReceiveMsg注解，用于自动接收和处理Redis消息队列中的消息
        - [add] RedisHelper增加publish和subscribe方法，用于广播和接受消息
