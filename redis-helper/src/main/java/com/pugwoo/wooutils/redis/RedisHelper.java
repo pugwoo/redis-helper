@@ -380,4 +380,24 @@ public interface RedisHelper {
 	 */
 	RedisQueueStatus getQueueStatus(String topic);
 
+	/////////////////// Redis Pub/Sub 发布订阅 ///////////////////////////////
+
+	/**
+	 * 发布消息到指定的 channel
+	 *
+	 * @param channel 频道名称
+	 * @param message 消息内容
+	 * @return 接收到消息的订阅者数量，发送失败返回null
+	 */
+	Long publish(String channel, String message);
+
+	/**
+	 * 订阅指定的 channel，阻塞式接收一条消息后返回
+	 * 注意：此方法会阻塞当前线程，直到接收到一条消息或发生异常
+	 *
+	 * @param channel 要订阅的频道
+	 * @return 接收到的消息内容，如果发生异常返回null
+	 */
+	String subscribe(String channel);
+
 }

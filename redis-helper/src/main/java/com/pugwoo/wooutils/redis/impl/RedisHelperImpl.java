@@ -632,6 +632,16 @@ public class RedisHelperImpl implements RedisHelper {
 		return RedisMsgQueue.getQueueStatus(this, topic);
 	}
 
+	@Override
+	public Long publish(String channel, String message) {
+		return RedisPubSub.publish(this, channel, message);
+	}
+
+	@Override
+	public String subscribe(String channel) {
+		return RedisPubSub.subscribe(this, channel);
+	}
+
 	public String getHost() {
 		return host;
 	}

@@ -1,16 +1,24 @@
 package com.pugwoo.redishelpertest.config;
 
 import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
+import com.pugwoo.redishelpertest.pubsub.PubSubTestService;
+import com.pugwoo.redishelpertest.pubsub.SubscribeTestService;
 import com.pugwoo.redishelpertest.ratelimit.RateLimitService;
+import com.pugwoo.redishelpertest.receivemsg.ReceiveMsgTestService;
 import com.pugwoo.redishelpertest.redis.sync.HeartbeatTestService;
 import com.pugwoo.redishelpertest.redis.sync.HelloService;
 import com.pugwoo.redishelpertest.redis.sync.HelloServiceWithMutilLock;
 import com.pugwoo.redishelpertest.redis.sync.LockModeTestService;
 import com.pugwoo.redishelpertest.redis.sync.ThrowIfNotGetLockTestService;
+import com.pugwoo.redishelpertest.sendmsg.SendMsgTestService;
 import com.pugwoo.wooutils.cache.HiSpeedCacheAspect;
+import com.pugwoo.wooutils.redis.PublishAspect;
+import com.pugwoo.wooutils.redis.ReceiveMsgProcessor;
 import com.pugwoo.wooutils.redis.RedisHelper;
 import com.pugwoo.wooutils.redis.RedisLimitAspect;
 import com.pugwoo.wooutils.redis.RedisSyncAspect;
+import com.pugwoo.wooutils.redis.SendMsgAspect;
+import com.pugwoo.wooutils.redis.SubscribeProcessor;
 import com.pugwoo.wooutils.redis.impl.RedisHelperImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
@@ -84,6 +92,46 @@ public class RedisHelperConfiguration {
     @Bean
     public LockModeTestService lockModeTestService() {
         return new LockModeTestService();
+    }
+
+    @Bean
+    public SendMsgAspect sendMsgAspect() {
+        return new SendMsgAspect();
+    }
+
+    @Bean
+    public SendMsgTestService sendMsgTestService() {
+        return new SendMsgTestService();
+    }
+
+    @Bean
+    public ReceiveMsgProcessor receiveMsgProcessor() {
+        return new ReceiveMsgProcessor();
+    }
+
+    @Bean
+    public ReceiveMsgTestService receiveMsgTestService() {
+        return new ReceiveMsgTestService();
+    }
+
+    @Bean
+    public PublishAspect publishAspect() {
+        return new PublishAspect();
+    }
+
+    @Bean
+    public PubSubTestService pubSubTestService() {
+        return new PubSubTestService();
+    }
+
+    @Bean
+    public SubscribeProcessor subscribeProcessor() {
+        return new SubscribeProcessor();
+    }
+
+    @Bean
+    public SubscribeTestService subscribeTestService() {
+        return new SubscribeTestService();
     }
 
 }
