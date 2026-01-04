@@ -293,8 +293,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
             if (continueFetch) {
                 ContinueFetchDTO continueFetchDTO = new ContinueFetchDTO(pjp, hiSpeedCache, expireTime, cacheNullValue);
                 keyContinueFetchMap.put(cacheKey, continueFetchDTO);
-                long nextFetchTime = Math.min(hiSpeedCache.expireSecond(), hiSpeedCache.continueFetchSecond())
-                        * 1000L + System.currentTimeMillis();
+                long nextFetchTime = calcNextFetchTime(hiSpeedCache);
                 addFetchToTimeLine(nextFetchTime, cacheKey);
             }
         }
@@ -353,6 +352,24 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 continueFetchDTO.expireTimestamp = fetchSecond * 1000L + System.currentTimeMillis();
             }
         }
+    }
+
+    /**
+     * 计算下一次刷新的时间戳，提前刷新以避免缓存过期瞬间请求穿透
+     * @param hiSpeedCache 缓存注解配置
+     * @return 下一次刷新的时间戳（毫秒）
+     */
+    private long calcNextFetchTime(HiSpeedCache hiSpeedCache) {
+        int expireSecond = hiSpeedCache.expireSecond();
+        int continueFetchSecond = hiSpeedCache.continueFetchSecond();
+
+        // 基础刷新间隔
+        int baseInterval = Math.min(expireSecond, continueFetchSecond);
+
+        // 提前刷新：在expireSecond的80%时间点刷新，避免缓存过期瞬间请求穿透
+        long nextFetchInterval = (long) (baseInterval * 0.8 * 1000L);
+
+        return nextFetchInterval + System.currentTimeMillis();
     }
 
     /**生成缓存最终的key*/
@@ -596,8 +613,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
                         if(continueFetchDTO == null) {
                             return;
                         }
-                        // 安排下一次调用
-                        long nextTime = continueFetchDTO.hiSpeedCache.expireSecond() * 1000L + System.currentTimeMillis();
+                        // 安排下一次调用，使用提前刷新的时间计算
+                        long nextTime = calcNextFetchTime(continueFetchDTO.hiSpeedCache);
 
                         // 多线程执行更新任务
                         executorService.submit(new Runnable() {

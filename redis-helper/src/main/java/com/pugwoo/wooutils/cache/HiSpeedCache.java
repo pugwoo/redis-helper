@@ -39,7 +39,8 @@ public @interface HiSpeedCache {
     int expireSecond() default 1;
 
     /**
-     * 当缓存接口被访问时，自动设定后续自动刷新缓存的时间。缓存将以expireSecond的频率持续更新continueFetchSecond秒。
+     * 当缓存接口被访问时，自动设定后续自动刷新缓存的时间。缓存将以expireSecond的频率持续更新continueFetchSecond秒。<br>
+     * 注意：后台刷新会在缓存过期前提前触发（约在expireSecond的80%时间点），以避免缓存过期瞬间请求穿透。
      */
     int continueFetchSecond() default 0;
 
