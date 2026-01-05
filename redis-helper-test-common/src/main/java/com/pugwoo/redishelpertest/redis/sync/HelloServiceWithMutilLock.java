@@ -6,22 +6,6 @@ import java.util.Date;
 
 public class HelloServiceWithMutilLock {
 
-	int a = 0;
-
-	@Synchronized(namespace = "hello0",waitLockMillisecond = 100000000)
-	@Synchronized(namespace = "hello1",waitLockMillisecond = 100000000)
-	@Synchronized(namespace = "hello2",waitLockMillisecond = 100000000)
-	@Synchronized(namespace = "hello3",waitLockMillisecond = 100000000)
-	@Synchronized(namespace = "hello4",waitLockMillisecond = 100000000)
-	public void add() throws Exception {
-		a++;
-	}
-
-	public int getA(){
-		return a;
-	}
-
-	
 	@Synchronized(namespace = "hello", keyScript = "args[0]")
 	@Synchronized(namespace = "hello1", keyScript = "args[0]")
 	public String hello(String name, int i) throws Exception {
