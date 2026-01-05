@@ -98,23 +98,29 @@ public abstract class TestReceiveMsg {
         String topic = "test-receive-exception";
         String message = "exception-msg-" + UUID.randomUUID().toString();
 
-        // 发送消息
-        String uuid = getRedisHelper().send(topic, message, 5); // 5秒超时，方便测试
+        try {
+            // 发送消息
+            String uuid = getRedisHelper().send(topic, message, 5); // 5秒超时，方便测试
 
-        // 等待消息被消费（会失败并 nack）
-        Thread.sleep(2000);
+            // 等待消息被消费（会失败并 nack）
+            Thread.sleep(2000);
 
-        // 验证失败计数增加
-        assert getReceiveMsgTestService().getFailedCount() >= 1;
+            // 验证失败计数增加
+            assert getReceiveMsgTestService().getFailedCount() >= 1;
 
-        // 等待消息重新投递
-        Thread.sleep(6000);
+            // 等待消息重新投递
+            Thread.sleep(6000);
 
-        // 验证消息被重新消费（再次失败）
-        assert getReceiveMsgTestService().getFailedCount() >= 2;
+            // 验证消息被重新消费（再次失败）
+            assert getReceiveMsgTestService().getFailedCount() >= 2;
 
-        System.out.println("testReceiveMsgWithException passed, failed count: " 
-                + getReceiveMsgTestService().getFailedCount());
+            System.out.println("testReceiveMsgWithException passed, failed count: "
+                    + getReceiveMsgTestService().getFailedCount());
+        } finally {
+            // 清理测试产生的异常消息，避免在Redis中堆积
+            getRedisHelper().removeTopic(topic);
+            System.out.println("Cleaned up exception messages for topic: " + topic);
+        }
     }
 
     /**
