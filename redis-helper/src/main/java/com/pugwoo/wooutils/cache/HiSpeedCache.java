@@ -39,8 +39,17 @@ public @interface HiSpeedCache {
     int expireSecond() default 1;
 
     /**
+     * 提前fetch更新数据的时间比例，0.8表示刷新频率为expireSecond的80%。<br>
+     * 例如expireSecond是60，那么实际刷新频率就是每60*0.8=48秒刷新一次<br>
+     * 特别的，当preFetchRatio等于0时，表示不间断一直刷新。<br>
+     * 当数值小于0或大于1时，设置无效，重置为0.8
+     */
+    double preFetchRatio() default 0.8;
+
+    /**
      * 当缓存接口被访问时，自动设定后续自动刷新缓存的时间。缓存将以expireSecond的频率持续更新continueFetchSecond秒。<br>
-     * 注意：后台刷新会在缓存过期前提前触发（约在expireSecond的80%时间点），以避免缓存过期瞬间请求穿透。
+     * continueFetchSecond必须大于0，否则不生效。一般来说，continueFetchSecond 大于 expireSecond。<br>
+     * 注意：后台刷新会在缓存过期前提前触发（约在expireSecond的80%时间点），以避免缓存过期瞬间请求穿透。<br>
      */
     int continueFetchSecond() default 0;
 

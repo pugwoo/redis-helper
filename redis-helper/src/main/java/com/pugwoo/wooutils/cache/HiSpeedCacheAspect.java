@@ -366,8 +366,12 @@ public class HiSpeedCacheAspect implements InitializingBean {
         // 基础刷新间隔
         int baseInterval = Math.min(expireSecond, continueFetchSecond);
 
-        // 提前刷新：在expireSecond的80%时间点刷新，避免缓存过期瞬间请求穿透
-        long nextFetchInterval = (long) (baseInterval * 0.8 * 1000L);
+        // 提前刷新，避免缓存过期瞬间请求穿透
+        double preFetchRatio = hiSpeedCache.preFetchRatio();
+        if(preFetchRatio < 0 || preFetchRatio > 1) {
+            preFetchRatio = 0.8;
+        }
+        long nextFetchInterval = (long) (baseInterval * preFetchRatio * 1000L);
 
         return nextFetchInterval + System.currentTimeMillis();
     }

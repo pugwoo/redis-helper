@@ -1,4 +1,5 @@
 v1.7.1 - [enhance] 优化HiSpeedCache的缓存刷新时机，提前20%刷新，减少缓存访问波动
+       - [add] HiSpeedCache增加preFetchRatio属性，允许用户调整提前刷新的时间比例
 
 2025年12月21日
 v1.7.0 - [add] 增加@SendMsg注解，用于在方法成功返回后自动发送消息到Redis消息队列
