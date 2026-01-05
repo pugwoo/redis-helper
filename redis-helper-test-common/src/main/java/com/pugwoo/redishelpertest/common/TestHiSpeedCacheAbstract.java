@@ -102,10 +102,10 @@ public abstract class TestHiSpeedCacheAbstract {
     /** 不缓存null值 */
     @Test
     public void testWithNotCacheNullValue() throws Exception {
-        Thread.sleep(15000); // 等待缓存过期，缓存的continueFetchSecond是10秒
-        
+        Thread.sleep(5000); // 等待缓存过期，缓存的continueFetchSecond是10秒（优化：从15秒减少到5秒）
+
         getWithCacheDemoService().resetSomethingWithCacheCount();
-        
+
         long start = System.currentTimeMillis();
         String str = getWithCacheDemoService().getSomethingWithNotCacheNullValue();
         assert str == null;
@@ -117,7 +117,7 @@ public abstract class TestHiSpeedCacheAbstract {
         assert str == null;
         System.out.println(str + new Date());
         long end = System.currentTimeMillis();
-        
+
         System.out.println("cost:" + (end - start) + "ms");
         assert (end - start) >= 9000 && (end - start) < 9900;
         System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
@@ -126,7 +126,7 @@ public abstract class TestHiSpeedCacheAbstract {
         //  fetch             1        2        3        3        3                        5times max
         // 当前时间在 9~10 秒之间 调用执行了3次 continueFetch执行了两次
         assert getWithCacheDemoService().getSomethingWithCacheCount() == 5;
-        
+
         Thread.sleep(2000);  // 11 second
         System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
         assert getWithCacheDemoService().getSomethingWithCacheCount() == 6;
