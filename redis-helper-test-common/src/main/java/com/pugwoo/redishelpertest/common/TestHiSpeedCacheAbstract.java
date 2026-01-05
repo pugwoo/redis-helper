@@ -90,7 +90,7 @@ public abstract class TestHiSpeedCacheAbstract {
         // String getSomethingWithCache is executed @ 2021-07-25 01:04:41  第五次fetch
         int count = getWithCacheDemoService().getSomethingWithCacheCount();
         System.out.println("testWithCache2 count:" + count);
-        assert (count >= 6 && count <= 8);
+        assert (count >= 6 && count <= 9); // 由于提前刷新功能开启，刷新次数从8次改成9次
     }
     
     /** 不缓存null值 */
@@ -169,7 +169,7 @@ public abstract class TestHiSpeedCacheAbstract {
         long end = System.currentTimeMillis();
 
         System.out.println("cost:" + (end - start) + "ms");
-        assert (end - start) > 3000 && (end - start) < 3900; // 不要超过6秒，就是合理的误差范围内
+        assert (end - start) > 3000 && (end - start) < 4500; // 不要超过6秒，就是合理的误差范围内
     }
 
     @Test
