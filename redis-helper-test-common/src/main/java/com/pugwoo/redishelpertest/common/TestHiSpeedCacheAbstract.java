@@ -1,12 +1,18 @@
 package com.pugwoo.redishelpertest.common;
 
 import com.pugwoo.redishelpertest.cache.WithCacheDemoService;
+import com.pugwoo.wooutils.cache.HiSpeedCacheAspect;
 import com.pugwoo.wooutils.cache.HiSpeedCacheContext;
 import com.pugwoo.wooutils.cache.HiSpeedCacheStatisticDTO;
 import com.pugwoo.wooutils.json.JSON;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class TestHiSpeedCacheAbstract {
 
@@ -359,6 +365,217 @@ public abstract class TestHiSpeedCacheAbstract {
         assert (end - start) < 100; // 此时能走缓存
         assert "ok".equals(result); // 结果也正确
         System.out.println("cost:" + (end - start) + "ms");
+    }
+
+    /**
+     * 测试 cacheRebuildWaitMs > 0 的情况
+     * 当多个请求同时进来时，follower线程等待leader线程的结果
+     */
+    @Test
+    public void testCacheRebuildWaitMs_WithWait() throws Exception {
+        Thread.sleep(15000); // 等待之前的缓存过期
+        getWithCacheDemoService().resetCacheRebuildWaitMsCallCount();
+
+        int threadCount = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+        List<String> results = Collections.synchronizedList(new ArrayList<>());
+
+        // 启动多个线程同时请求
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await(); // 等待所有线程准备好
+                    String result = getWithCacheDemoService().getSlowDataWithWait();
+                    results.add(result);
+                    successCount.incrementAndGet();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+
+        long start = System.currentTimeMillis();
+        startLatch.countDown(); // 同时启动所有线程
+        endLatch.await(5, TimeUnit.SECONDS); // 等待所有线程完成
+        long end = System.currentTimeMillis();
+
+        executor.shutdown();
+
+        System.out.println("testCacheRebuildWaitMs_WithWait cost:" + (end - start) + "ms");
+        System.out.println("testCacheRebuildWaitMs_WithWait call count:" + getWithCacheDemoService().getCacheRebuildWaitMsCallCount());
+        System.out.println("testCacheRebuildWaitMs_WithWait success count:" + successCount.get());
+
+        // 验证：所有线程都成功获取到结果
+        assert successCount.get() == threadCount;
+        // 验证：由于follower等待leader的结果，实际调用次数应该是1次（只有leader调用）
+        assert getWithCacheDemoService().getCacheRebuildWaitMsCallCount() == 1;
+        // 验证：所有结果应该相同（都是leader的结果）
+        String firstResult = results.get(0);
+        for (String result : results) {
+            assert result.equals(firstResult);
+        }
+        // 验证：总耗时应该接近1秒（leader的执行时间），而不是10秒（10个线程各执行1秒）
+        assert (end - start) >= 1000 && (end - start) < 2000;
+    }
+
+    /**
+     * 测试 cacheRebuildWaitMs = 0 的情况
+     * 当多个请求同时进来时，follower线程不等待，直接调用业务方法
+     */
+    @Test
+    public void testCacheRebuildWaitMs_WithoutWait() throws Exception {
+        Thread.sleep(15000); // 等待之前的缓存过期
+        getWithCacheDemoService().resetCacheRebuildWaitMsCallCount();
+
+        int threadCount = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+
+        // 启动多个线程同时请求
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await(); // 等待所有线程准备好
+                    getWithCacheDemoService().getSlowDataWithoutWait();
+                    successCount.incrementAndGet();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+
+        long start = System.currentTimeMillis();
+        startLatch.countDown(); // 同时启动所有线程
+        endLatch.await(15, TimeUnit.SECONDS); // 等待所有线程完成
+        long end = System.currentTimeMillis();
+
+        executor.shutdown();
+
+        System.out.println("testCacheRebuildWaitMs_WithoutWait cost:" + (end - start) + "ms");
+        System.out.println("testCacheRebuildWaitMs_WithoutWait call count:" + getWithCacheDemoService().getCacheRebuildWaitMsCallCount());
+        System.out.println("testCacheRebuildWaitMs_WithoutWait success count:" + successCount.get());
+
+        // 验证：所有线程都成功获取到结果
+        assert successCount.get() == threadCount;
+        // 验证：由于不等待，所有线程都会调用业务方法
+        assert getWithCacheDemoService().getCacheRebuildWaitMsCallCount() == threadCount;
+        // 验证：总耗时应该接近1秒（并发执行），而不是10秒（串行执行）
+        assert (end - start) >= 1000 && (end - start) < 2000;
+    }
+
+    /**
+     * 测试 cacheRebuildWaitMs 超时的情况
+     * 当leader执行时间超过等待时间时，follower线程超时后自己调用业务方法
+     */
+    @Test
+    public void testCacheRebuildWaitMs_Timeout() throws Exception {
+        Thread.sleep(15000); // 等待之前的缓存过期
+        getWithCacheDemoService().resetCacheRebuildWaitMsCallCount();
+
+        int threadCount = 5;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+
+        // 启动多个线程同时请求
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await(); // 等待所有线程准备好
+                    getWithCacheDemoService().getVerySlowDataWithShortWait();
+                    successCount.incrementAndGet();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+
+        long start = System.currentTimeMillis();
+        startLatch.countDown(); // 同时启动所有线程
+        endLatch.await(15, TimeUnit.SECONDS); // 等待所有线程完成
+        long end = System.currentTimeMillis();
+
+        executor.shutdown();
+
+        System.out.println("testCacheRebuildWaitMs_Timeout cost:" + (end - start) + "ms");
+        System.out.println("testCacheRebuildWaitMs_Timeout call count:" + getWithCacheDemoService().getCacheRebuildWaitMsCallCount());
+        System.out.println("testCacheRebuildWaitMs_Timeout success count:" + successCount.get());
+
+        // 验证：所有线程都成功获取到结果
+        assert successCount.get() == threadCount;
+        // 验证：由于等待超时（500ms < 2000ms执行时间），follower线程会自己调用业务方法
+        // 所以调用次数应该大于1（leader + 部分或全部follower）
+        assert getWithCacheDemoService().getCacheRebuildWaitMsCallCount() > 1;
+        // 验证：总耗时应该接近2秒（leader执行时间），因为follower超时后也会并发执行
+        assert (end - start) >= 2000 && (end - start) < 3000;
+    }
+
+    /**
+     * 测试 leader 调用失败的情况
+     * 当leader调用失败时，follower线程应该自己调用业务方法
+     */
+    @Test
+    public void testCacheRebuildWaitMs_LeaderFailure() throws Exception {
+        Thread.sleep(15000); // 等待之前的缓存过期
+        getWithCacheDemoService().resetCacheRebuildWaitMsCallCount();
+
+        int threadCount = 5;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger firstCall = new AtomicInteger(0);
+
+        // 启动多个线程同时请求
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await(); // 等待所有线程准备好
+                    // 第一个线程（leader）会失败，其他线程应该成功
+                    boolean shouldFail = firstCall.getAndIncrement() == 0;
+                    String result = getWithCacheDemoService().getDataWithLeaderFailure(shouldFail);
+                    System.out.println(shouldFail + "=========" + result);
+                    if (result != null) {
+                        successCount.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    // leader失败是预期的
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+
+        long start = System.currentTimeMillis();
+        startLatch.countDown(); // 同时启动所有线程
+        endLatch.await(10, TimeUnit.SECONDS); // 等待所有线程完成
+        long end = System.currentTimeMillis();
+
+        executor.shutdown();
+
+        System.out.println("testCacheRebuildWaitMs_LeaderFailure cost:" + (end - start) + "ms");
+        System.out.println("testCacheRebuildWaitMs_LeaderFailure call count:" + getWithCacheDemoService().getCacheRebuildWaitMsCallCount());
+        System.out.println("testCacheRebuildWaitMs_LeaderFailure success count:" + successCount.get());
+
+        // 验证：除了leader失败外，其他线程都应该成功
+        assert successCount.get() == threadCount - 1;
+        // 验证：由于leader失败，follower线程会自己调用业务方法
+        // 所以调用次数应该是threadCount（leader失败 + 所有follower重新调用）
+        assert getWithCacheDemoService().getCacheRebuildWaitMsCallCount() == threadCount;
+        // 验证：总耗时应该接近500ms（单次执行时间），因为follower会并发执行
+        assert (end - start) >= 500 && (end - start) < 1500;
     }
 
 }

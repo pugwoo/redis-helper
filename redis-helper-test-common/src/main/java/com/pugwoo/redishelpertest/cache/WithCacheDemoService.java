@@ -137,4 +137,52 @@ public class WithCacheDemoService {
         return "ok";
     }
 
+    //////////////////////////////////////
+    // cacheRebuildWaitMs 测试相关方法
+
+    private AtomicInteger cacheRebuildWaitMsCallCount = new AtomicInteger(0);
+
+    // 测试 cacheRebuildWaitMs > 0 的情况，follower等待leader的结果
+    @HiSpeedCache(expireSecond = 10, cacheRebuildWaitMs = 2000, cloneReturn = false)
+    public String getSlowDataWithWait() throws Exception {
+        cacheRebuildWaitMsCallCount.incrementAndGet();
+        Thread.sleep(1000); // 睡眠1秒，模拟慢查询
+        return "result-" + System.currentTimeMillis();
+    }
+
+    // 测试 cacheRebuildWaitMs = 0 的情况，follower不等待直接调用
+    @HiSpeedCache(expireSecond = 10, cacheRebuildWaitMs = 0, cloneReturn = false)
+    public String getSlowDataWithoutWait() throws Exception {
+        cacheRebuildWaitMsCallCount.incrementAndGet();
+        Thread.sleep(1000); // 睡眠1秒，模拟慢查询
+        return "result-" + System.currentTimeMillis();
+    }
+
+    // 测试 cacheRebuildWaitMs 超时的情况
+    @HiSpeedCache(expireSecond = 10, cacheRebuildWaitMs = 500, cloneReturn = false)
+    public String getVerySlowDataWithShortWait() throws Exception {
+        cacheRebuildWaitMsCallCount.incrementAndGet();
+        Thread.sleep(2000); // 睡眠2秒，超过等待时间500ms
+        return "result-" + System.currentTimeMillis();
+    }
+
+    // 测试 leader 调用失败的情况
+    @HiSpeedCache(expireSecond = 10, cacheRebuildWaitMs = 2000, cloneReturn = false)
+    public String getDataWithLeaderFailure(boolean shouldFail) throws Exception {
+        cacheRebuildWaitMsCallCount.incrementAndGet();
+        Thread.sleep(500);
+        if (shouldFail) {
+            throw new RuntimeException("Leader call failed");
+        }
+        return "result-" + System.currentTimeMillis();
+    }
+
+    public Integer getCacheRebuildWaitMsCallCount() {
+        return cacheRebuildWaitMsCallCount.get();
+    }
+
+    public void resetCacheRebuildWaitMsCallCount() {
+        cacheRebuildWaitMsCallCount.set(0);
+    }
+
 }
