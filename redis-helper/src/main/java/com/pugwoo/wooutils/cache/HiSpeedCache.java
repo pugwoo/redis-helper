@@ -63,6 +63,7 @@ public @interface HiSpeedCache {
     /**
      * 当N个相同key的请求同时进来时，第一个请求调用业务逻辑，其它请求最多等待cacheRebuildWaitMs毫秒复用第一个请求的结果，<br>
      * 如果等待时间超过cacheRebuildWaitMs毫秒，则不再等待，直接调用业务逻辑。<br>
+     * 当值为0或小于0，则不等待，直接调用业务逻辑。
      */
     int cacheRebuildWaitMs() default 1000;
 
