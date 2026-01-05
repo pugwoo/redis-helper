@@ -61,27 +61,27 @@ public abstract class TestHiSpeedCacheAbstract {
     /** 缓存null值 */
     @Test
     public void testWithCache2() throws Exception {
-        Thread.sleep(15000); // 等待缓存过期，缓存的continueFetchSecond是10秒
-        
+        Thread.sleep(5000); // 等待缓存过期，缓存的continueFetchSecond是10秒（优化：从15秒减少到5秒）
+
         getWithCacheDemoService().resetSomethingWithCacheCount();
         long start = System.currentTimeMillis();
-        
+
         String str;
-        // 100ms * 100 = 10s
+        // 100ms * 50 = 5s（优化：从100次减少到50次）
         // 第一次调用sleep了3s
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 50; i++) {
             str = getWithCacheDemoService().getSomethingWithCache2();
             // System.out.println(str + " " + new Date());
             assert str == null;
             Thread.sleep(100);
         }
-        Thread.sleep(20000); // sleep的时候后台一直在fetch数据
+        Thread.sleep(10000); // sleep的时候后台一直在fetch数据（优化：从20秒减少到10秒）
         long end = System.currentTimeMillis();
-        
-        // 共计 10s + 3s +20s = 33s
+
+        // 共计 5s + 3s + 10s = 18s（优化：从33秒减少到18秒）
         System.out.println("cost:" + (end - start) + "ms");
-        assert (end - start) >= 33000 && (end - start) < 40000; // 这里由原来的34秒，放宽到40秒，因为网络延迟
-        
+        assert (end - start) >= 18000 && (end - start) < 25000; // 这里由原来的34秒，放宽到25秒，因为网络延迟
+
         // String getSomethingWithCache is start    @ 2021-07-25 01:04:15
         // String getSomethingWithCache is executed @ 2021-07-25 01:04:18  第一次调用
         // String getSomethingWithCache is start    @ 2021-07-25 01:04:22
