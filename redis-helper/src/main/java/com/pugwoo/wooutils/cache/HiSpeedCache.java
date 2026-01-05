@@ -61,6 +61,12 @@ public @interface HiSpeedCache {
     boolean concurrentFetch() default false;
 
     /**
+     * 当N个相同key的请求同时进来时，第一个请求调用业务逻辑，其它请求最多等待cacheRebuildWaitMs毫秒复用第一个请求的结果，<br>
+     * 如果等待时间超过cacheRebuildWaitMs毫秒，则不再等待，直接调用业务逻辑。<br>
+     */
+    int cacheRebuildWaitMs() default 1000;
+
+    /**
      * 是否json克隆返回数据，默认true<br>
      * 如果启动克隆，那么调用者对返回值进行修改，就不会影响缓存的值。<br>
      * 如果没有启动克隆，性能能达到最大。请注意，调用者如果修改了返回值，等于直接修改缓存的值，可能导致严重的bug，因此不建议修改返回值。

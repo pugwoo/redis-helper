@@ -238,12 +238,19 @@ public class HiSpeedCacheAspect implements InitializingBean {
         // 强制刷新或缓存没有命中时，走下面的逻辑
         if (!isTryForceRefreshSuccess) {
             // 没有强制刷新的情况下，如果调用业务逻辑异常，同时还有redis过期缓存时，那么fallback为redis的缓存
-            if (!forceRefresh && isRedisHaveData) {
-                try {
+            if (!forceRefresh) {
+                if (isRedisHaveData) {
+                    try {
+                        ret = pjp.proceed();
+                    } catch (Throwable e) {
+                        LOGGER.error("call biz method fail, fallback to redis cache, key:{}", cacheKey, e);
+                        return redisCachedValue; // 一次性使用，也不会将这个值重新刷到缓存中，这里不需要processClone
+                    }
+                } else {
+                    // 这里需要处理缓存击穿的问题
+                    // 当有N个请求同时进入时，保证只有一个发起了业务请求，其它N-1个请求等待一定秒数后要么使用请求要么调用业务
+                    // TODO
                     ret = pjp.proceed();
-                } catch (Throwable e) {
-                    LOGGER.error("call biz method fail, fallback to redis cache, key:{}", cacheKey, e);
-                    return redisCachedValue; // 一次性使用，也不会将这个值重新刷到缓存中，这里不需要processClone
                 }
             } else {
                 ret = pjp.proceed();
