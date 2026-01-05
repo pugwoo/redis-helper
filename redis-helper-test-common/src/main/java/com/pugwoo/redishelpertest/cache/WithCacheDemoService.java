@@ -141,6 +141,7 @@ public class WithCacheDemoService {
     // cacheRebuildWaitMs 测试相关方法
 
     private AtomicInteger cacheRebuildWaitMsCallCount = new AtomicInteger(0);
+    private AtomicInteger leaderFailureFirstCall = new AtomicInteger(0);
 
     // 测试 cacheRebuildWaitMs > 0 的情况，follower等待leader的结果
     @HiSpeedCache(expireSecond = 10, cacheRebuildWaitMs = 2000, cloneReturn = false)
@@ -166,12 +167,14 @@ public class WithCacheDemoService {
         return "result-" + System.currentTimeMillis();
     }
 
-    // 测试 leader 调用失败的情况
+    // 测试 leader 调用失败的情况 - 第一次调用失败，后续调用成功
     @HiSpeedCache(expireSecond = 10, cacheRebuildWaitMs = 2000, cloneReturn = false)
-    public String getDataWithLeaderFailure(boolean shouldFail) throws Exception {
+    public String getDataWithLeaderFailure() throws Exception {
+        int callNumber = leaderFailureFirstCall.incrementAndGet();
         cacheRebuildWaitMsCallCount.incrementAndGet();
         Thread.sleep(500);
-        if (shouldFail) {
+        // 第一次调用失败，后续调用成功
+        if (callNumber == 1) {
             throw new RuntimeException("Leader call failed");
         }
         return "result-" + System.currentTimeMillis();
@@ -183,6 +186,10 @@ public class WithCacheDemoService {
 
     public void resetCacheRebuildWaitMsCallCount() {
         cacheRebuildWaitMsCallCount.set(0);
+    }
+
+    public void resetLeaderFailureFirstCall() {
+        leaderFailureFirstCall.set(0);
     }
 
 }

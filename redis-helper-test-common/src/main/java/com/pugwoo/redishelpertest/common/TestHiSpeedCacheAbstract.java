@@ -530,28 +530,27 @@ public abstract class TestHiSpeedCacheAbstract {
     public void testCacheRebuildWaitMs_LeaderFailure() throws Exception {
         Thread.sleep(15000); // 等待之前的缓存过期
         getWithCacheDemoService().resetCacheRebuildWaitMsCallCount();
+        getWithCacheDemoService().resetLeaderFailureFirstCall();
 
         int threadCount = 5;
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch endLatch = new CountDownLatch(threadCount);
         AtomicInteger successCount = new AtomicInteger(0);
-        AtomicInteger firstCall = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
 
         // 启动多个线程同时请求
         for (int i = 0; i < threadCount; i++) {
             executor.submit(() -> {
                 try {
                     startLatch.await(); // 等待所有线程准备好
-                    // 第一个线程（leader）会失败，其他线程应该成功
-                    boolean shouldFail = firstCall.getAndIncrement() == 0;
-                    String result = getWithCacheDemoService().getDataWithLeaderFailure(shouldFail);
-                    System.out.println(shouldFail + "=========" + result);
+                    String result = getWithCacheDemoService().getDataWithLeaderFailure();
                     if (result != null) {
                         successCount.incrementAndGet();
                     }
                 } catch (Exception e) {
                     // leader失败是预期的
+                    failureCount.incrementAndGet();
                 } finally {
                     endLatch.countDown();
                 }
@@ -568,11 +567,13 @@ public abstract class TestHiSpeedCacheAbstract {
         System.out.println("testCacheRebuildWaitMs_LeaderFailure cost:" + (end - start) + "ms");
         System.out.println("testCacheRebuildWaitMs_LeaderFailure call count:" + getWithCacheDemoService().getCacheRebuildWaitMsCallCount());
         System.out.println("testCacheRebuildWaitMs_LeaderFailure success count:" + successCount.get());
+        System.out.println("testCacheRebuildWaitMs_LeaderFailure failure count:" + failureCount.get());
 
         // 验证：除了leader失败外，其他线程都应该成功
         assert successCount.get() == threadCount - 1;
-        // 验证：由于leader失败，follower线程会自己调用业务方法
-        // 所以调用次数应该是threadCount（leader失败 + 所有follower重新调用）
+        assert failureCount.get() == 1; // 只有leader失败
+        // 验证：由于leader失败，所有follower线程都会检测到ExecutionException并自己调用业务方法
+        // 所以调用次数应该是threadCount（1个leader失败 + 4个follower各自调用）
         assert getWithCacheDemoService().getCacheRebuildWaitMsCallCount() == threadCount;
         // 验证：总耗时应该接近500ms（单次执行时间），因为follower会并发执行
         assert (end - start) >= 500 && (end - start) < 1500;
