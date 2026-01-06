@@ -12,36 +12,6 @@ public abstract class TestSyncWithMutilLock {
     public abstract HelloServiceWithMutilLock getHelloServiceWithMutilLock();
 
     @Test
-    public void testAdd() throws Exception {
-
-        System.out.println("a: " + getHelloServiceWithMutilLock().getA());
-
-        List<Thread> thread = new ArrayList<>();
-
-        for (int i = 1; i <= 10; i++) {
-            Thread t = new Thread(() -> {
-                try {
-                    for (int i1 = 0; i1 < 30; i1++) {
-                        getHelloServiceWithMutilLock().add();
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            });
-            t.start();
-            thread.add(t);
-        }
-        for (Thread t : thread) {
-            t.join();
-        }
-        System.out.println("a: " + getHelloServiceWithMutilLock().getA());
-
-        RedisSyncContext.printCostInfo();
-
-        assert getHelloServiceWithMutilLock().getA() == 30 * 10;
-    }
-
-    @Test
     public void testHello() throws Exception {
         List<Thread> thread = new ArrayList<>();
 

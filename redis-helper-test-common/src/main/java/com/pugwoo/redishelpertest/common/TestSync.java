@@ -167,7 +167,7 @@ public abstract class TestSync {
         assert haveRunCount.get() == 3;    // 总共执行三次
         assert haveNotRunCount.get() == 3;  // 第一个执行时，两个失败了，第二次执行时，一个失败了，加起来三次
         assert cost >= 3000;
-        assert cost <= 4000;
+        assert cost <= 4100; // 从4000->4100，允许一定的网络延迟
     }
 
     @Test

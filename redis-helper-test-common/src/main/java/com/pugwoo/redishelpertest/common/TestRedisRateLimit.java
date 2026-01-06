@@ -17,8 +17,8 @@ public abstract class TestRedisRateLimit {
 
     @Test
     public void testRateLimit() {
-        // 起10个线程，连续调用3分20秒，非收尾时间段肯定是完整的1分钟，此时调用成功的数量应该是10000个
-        long endTime = System.currentTimeMillis() + 3 * 60 * 1000 + 20 * 1000;
+        // 起10个线程，连续调用35秒，非收尾时间段肯定是完整的10秒，此时调用成功的数量应该是1000个
+        long endTime = System.currentTimeMillis() + 35 * 1000;
         List<Thread> threads = new ArrayList<>();
         Map<String, AtomicLong> timeCount = new HashMap<>();
         for (int i = 0; i < 10; i++) {
@@ -26,7 +26,8 @@ public abstract class TestRedisRateLimit {
                 while (System.currentTimeMillis() <= endTime) {
                     try {
                         int second = DateUtils.getSecond(new Date());
-                        if (second < 10 || second > 50) { // 为了避免本地和Redis的时间差，这里只在10-50秒之间调用
+                        int secondMod10 = second % 10;
+                        if (secondMod10 < 2 || secondMod10 > 8) { // 为了避免本地和Redis的时间差，这里只在每10秒的2-8秒之间调用
                             continue;
                         }
 
@@ -35,11 +36,12 @@ public abstract class TestRedisRateLimit {
                         assert uuid.equals(uuid2);
 
                         synchronized (timeCount) {
-                            String minute = DateUtils.format(new Date(), "yyyy-MM-dd HH:mm");
-                            AtomicLong atomicLong = timeCount.get(minute);
+                            String tenSecond = DateUtils.format(new Date(), "yyyy-MM-dd HH:mm:ss");
+                            tenSecond = tenSecond.substring(0, tenSecond.length() - 1) + "0";
+                            AtomicLong atomicLong = timeCount.get(tenSecond);
                             if (atomicLong == null) {
                                 atomicLong = new AtomicLong();
-                                timeCount.put(minute, atomicLong);
+                                timeCount.put(tenSecond, atomicLong);
                             }
                             atomicLong.incrementAndGet();
                         }
@@ -63,12 +65,12 @@ public abstract class TestRedisRateLimit {
 
         System.out.println(JSON.toJson(timeCount));
 
-        // 不是开始和结束的时间段，应该是20000个
+        // 不是开始和结束的时间段，应该是1000个
         List<Map<String, Object>> list = ListUtils.transform(timeCount.entrySet(), o -> MapUtils.of("key", o.getKey(), "value", o.getValue()));
         ListUtils.sortAscNullLast(list, o -> (String) o.get("key"));
         boolean atLeastCheckOne = false;
         for (int i = 1; i < list.size() - 1; i++) {
-            assert list.get(i).get("value").toString().equals(String.valueOf(10000L));
+            assert list.get(i).get("value").toString().equals(String.valueOf(1000L));
             atLeastCheckOne = true;
         }
         assert atLeastCheckOne;
@@ -77,8 +79,8 @@ public abstract class TestRedisRateLimit {
 
     @Test
     public void testRateLimit2() {
-        // 起10个线程，连续调用3分20秒，非收尾时间段肯定是完整的1分钟，此时调用成功的数量应该是20000个
-        long endTime = System.currentTimeMillis() + 3 * 60 * 1000 + 20 * 1000;
+        // 起10个线程，连续调用35秒，非收尾时间段肯定是完整的10秒，此时调用成功的数量应该是100个
+        long endTime = System.currentTimeMillis() + 35 * 1000;
         List<Thread> threads = new ArrayList<>();
         Map<String, AtomicLong> timeCount = new HashMap<>();
         Map<String, AtomicLong> timeCount2 = new HashMap<>();
@@ -87,10 +89,8 @@ public abstract class TestRedisRateLimit {
                 while (System.currentTimeMillis() <= endTime) {
                     try {
                         int second = DateUtils.getSecond(new Date());
-                        if (second < 10 || second > 50) { // 为了避免本地和Redis的时间差，这里只在10-50秒之间调用
-                            continue;
-                        }
-                        if (second % 10 < 2 || second % 10 > 8) { // 为了避免本地和Redis的时间差，这里只在2~8秒之间调用
+                        int secondMod10 = second % 10;
+                        if (secondMod10 < 2 || secondMod10 > 8) { // 为了避免本地和Redis的时间差，这里只在每10秒的2-8秒之间调用
                             continue;
                         }
 
@@ -99,20 +99,20 @@ public abstract class TestRedisRateLimit {
                         assert uuid.equals(uuid2);
 
                         synchronized (timeCount) {
-                            String minute = DateUtils.format(new Date(), "yyyy-MM-dd HH:mm");
-                            AtomicLong atomicLong = timeCount.get(minute);
+                            String tenSecond = DateUtils.format(new Date(), "yyyy-MM-dd HH:mm:ss");
+                            tenSecond = tenSecond.substring(0, tenSecond.length() - 1) + "0";
+                            AtomicLong atomicLong = timeCount.get(tenSecond);
                             if (atomicLong == null) {
                                 atomicLong = new AtomicLong();
-                                timeCount.put(minute, atomicLong);
+                                timeCount.put(tenSecond, atomicLong);
                             }
                             atomicLong.incrementAndGet();
 
-                            String seconds = DateUtils.format(new Date(), "yyyy-MM-dd HH:mm:ss");
-                            seconds = seconds.substring(0, seconds.length() - 1) + "0";
-                            atomicLong = timeCount2.get(seconds);
+                            String oneSecond = DateUtils.format(new Date(), "yyyy-MM-dd HH:mm:ss");
+                            atomicLong = timeCount2.get(oneSecond);
                             if (atomicLong == null) {
                                 atomicLong = new AtomicLong();
-                                timeCount2.put(seconds, atomicLong);
+                                timeCount2.put(oneSecond, atomicLong);
                             }
                             atomicLong.incrementAndGet();
                         }
@@ -139,11 +139,11 @@ public abstract class TestRedisRateLimit {
             ListUtils.sortAscNullLast(list, o -> (String) o.get("key"));
             System.out.println(JSON.toJson(list));
 
-            // 不是开始和结束的时间段，应该是20000个
+            // 不是开始和结束的时间段，应该是100个
             ListUtils.sortAscNullLast(list, o -> (String) o.get("key"));
             boolean atLeastCheckOne = false;
             for (int i = 1; i < list.size() - 1; i++) {
-                assert list.get(i).get("value").toString().equals(String.valueOf(1000L));
+                assert list.get(i).get("value").toString().equals(String.valueOf(100L));
                 atLeastCheckOne = true;
             }
             assert atLeastCheckOne;
@@ -154,18 +154,18 @@ public abstract class TestRedisRateLimit {
             ListUtils.sortAscNullLast(list, o -> (String) o.get("key"));
             System.out.println(JSON.toJson(list));
 
-            // 中间2分钟都是1000个，因此至少会出现4个400和2个200
-            int count400 = 0;
-            int count200 = 0;
+            // 中间20秒都是100个，因此至少会出现4个40和2个20
+            int count40 = 0;
+            int count20 = 0;
             for (int i = 0; i < list.size(); i++) {
-                if (list.get(i).get("value").toString().equals(String.valueOf(400L))) {
-                    count400++;
-                } else if (list.get(i).get("value").toString().equals(String.valueOf(200L))) {
-                    count200++;
+                if (list.get(i).get("value").toString().equals(String.valueOf(40L))) {
+                    count40++;
+                } else if (list.get(i).get("value").toString().equals(String.valueOf(20L))) {
+                    count20++;
                 }
             }
-            assert count400 >= 4;
-            assert count200 >= 2;
+            assert count40 >= 4;
+            assert count20 >= 2;
         }
 
     }

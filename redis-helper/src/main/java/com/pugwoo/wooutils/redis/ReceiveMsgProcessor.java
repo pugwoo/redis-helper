@@ -249,7 +249,7 @@ public class ReceiveMsgProcessor implements InitializingBean, ApplicationContext
         // 关闭线程池
         receiveMsgThreadPool.shutdown();
         try {
-            if (!receiveMsgThreadPool.awaitTermination(30, TimeUnit.SECONDS)) {
+            if (!receiveMsgThreadPool.awaitTermination(10, TimeUnit.SECONDS)) {
                 receiveMsgThreadPool.shutdownNow();
             }
         } catch (InterruptedException e) {

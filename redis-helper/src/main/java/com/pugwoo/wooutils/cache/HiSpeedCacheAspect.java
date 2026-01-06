@@ -27,10 +27,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @EnableAspectJAutoProxy
@@ -123,6 +127,9 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private volatile ContinueUpdateTask continueThread = null; // 不需要多线程
 
     private final Map<String, Boolean> concurrentFetchControl = new ConcurrentHashMap<>(); // 控制fetch的并发执行
+    
+    // 跟踪正在进行中的调用，用于防止缓存击穿
+    private final Map<String, CompletableFuture<Object>> inFlightCalls = new ConcurrentHashMap<>();
 
     @Around("@annotation(com.pugwoo.wooutils.cache.HiSpeedCache) execution(* *.*(..))")
     public Object around(ProceedingJoinPoint pjp) throws Throwable {
@@ -238,12 +245,18 @@ public class HiSpeedCacheAspect implements InitializingBean {
         // 强制刷新或缓存没有命中时，走下面的逻辑
         if (!isTryForceRefreshSuccess) {
             // 没有强制刷新的情况下，如果调用业务逻辑异常，同时还有redis过期缓存时，那么fallback为redis的缓存
-            if (!forceRefresh && isRedisHaveData) {
-                try {
-                    ret = pjp.proceed();
-                } catch (Throwable e) {
-                    LOGGER.error("call biz method fail, fallback to redis cache, key:{}", cacheKey, e);
-                    return redisCachedValue; // 一次性使用，也不会将这个值重新刷到缓存中，这里不需要processClone
+            if (!forceRefresh) {
+                if (isRedisHaveData) {
+                    try {
+                        ret = pjp.proceed();
+                    } catch (Throwable e) {
+                        LOGGER.error("call biz method fail, fallback to redis cache, key:{}", cacheKey, e);
+                        return redisCachedValue; // 一次性使用，也不会将这个值重新刷到缓存中，这里不需要processClone
+                    }
+                } else {
+                    // 这里需要处理缓存击穿的问题
+                    // 当有N个请求同时进入时，保证只有一个发起了业务请求，其它N-1个请求等待一定秒数后要么使用请求要么调用业务
+                    ret = handleCacheBreakdown(pjp, hiSpeedCache, cacheKey);
                 }
             } else {
                 ret = pjp.proceed();
@@ -293,8 +306,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
             if (continueFetch) {
                 ContinueFetchDTO continueFetchDTO = new ContinueFetchDTO(pjp, hiSpeedCache, expireTime, cacheNullValue);
                 keyContinueFetchMap.put(cacheKey, continueFetchDTO);
-                long nextFetchTime = Math.min(hiSpeedCache.expireSecond(), hiSpeedCache.continueFetchSecond())
-                        * 1000L + System.currentTimeMillis();
+                long nextFetchTime = calcNextFetchTime(hiSpeedCache);
                 addFetchToTimeLine(nextFetchTime, cacheKey);
             }
         }
@@ -353,6 +365,89 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 continueFetchDTO.expireTimestamp = fetchSecond * 1000L + System.currentTimeMillis();
             }
         }
+    }
+
+    /**
+     * 处理缓存击穿问题
+     * 当N个请求同时进入时，保证只有一个发起了业务请求，其它N-1个请求等待一定时间后复用结果或调用业务
+     *
+     * @param pjp ProceedingJoinPoint
+     * @param hiSpeedCache 缓存注解配置
+     * @param cacheKey 缓存key
+     * @return 方法执行结果
+     * @throws Throwable 执行异常
+     */
+    private Object handleCacheBreakdown(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache, String cacheKey) throws Throwable {
+        int waitMs = hiSpeedCache.cacheRebuildWaitMs();
+        
+        // 尝试成为leader（第一个请求）
+        CompletableFuture<Object> future = new CompletableFuture<>();
+        CompletableFuture<Object> existing = inFlightCalls.putIfAbsent(cacheKey, future);
+        
+        if (existing == null) {
+            // 我是leader，需要真正调用业务方法
+            try {
+                Object result = pjp.proceed();
+                // 调用成功，complete结果给等待的线程
+                future.complete(result);
+                return result;
+            } catch (Throwable e) {
+                // 调用失败，complete异常给等待的线程
+                future.completeExceptionally(e);
+                throw e;
+            } finally {
+                // 无论成功失败，都要移除in-flight标记
+                inFlightCalls.remove(cacheKey, future);
+            }
+        } else {
+            // 我是follower，等待leader的结果
+            try {
+                if (waitMs > 0) {
+                    // 等待指定时间
+                    Object result = existing.get(waitMs, TimeUnit.MILLISECONDS);
+                    // leader成功返回，复用结果
+                    return result;
+                } else {
+                    // waitMs <= 0 表示不等待，直接调用
+                    return pjp.proceed();
+                }
+            } catch (TimeoutException e) {
+                // 超时，leader在指定时间内没返回，自己去调用
+                LOGGER.warn("wait for cache rebuild timeout, key:{}, waitMs:{}, will call business directly",
+                        cacheKey, waitMs);
+                return pjp.proceed();
+            } catch (ExecutionException e) {
+                // leader调用失败了，自己去调用
+                Throwable cause = e.getCause();
+                if (cause != null) {
+                    LOGGER.warn("leader call failed, key:{}, will call business directly, cause:{}",
+                            cacheKey, cause.getMessage());
+                }
+                return pjp.proceed();
+            }
+        }
+    }
+
+    /**
+     * 计算下一次刷新的时间戳，提前刷新以避免缓存过期瞬间请求穿透
+     * @param hiSpeedCache 缓存注解配置
+     * @return 下一次刷新的时间戳（毫秒）
+     */
+    private long calcNextFetchTime(HiSpeedCache hiSpeedCache) {
+        int expireSecond = hiSpeedCache.expireSecond();
+        int continueFetchSecond = hiSpeedCache.continueFetchSecond();
+
+        // 基础刷新间隔
+        int baseInterval = Math.min(expireSecond, continueFetchSecond);
+
+        // 提前刷新，避免缓存过期瞬间请求穿透
+        double preFetchRatio = hiSpeedCache.preFetchRatio();
+        if(preFetchRatio < 0 || preFetchRatio > 1) {
+            preFetchRatio = 0.8;
+        }
+        long nextFetchInterval = (long) (baseInterval * preFetchRatio * 1000L);
+
+        return nextFetchInterval + System.currentTimeMillis();
     }
 
     /**生成缓存最终的key*/
@@ -596,8 +691,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
                         if(continueFetchDTO == null) {
                             return;
                         }
-                        // 安排下一次调用
-                        long nextTime = continueFetchDTO.hiSpeedCache.expireSecond() * 1000L + System.currentTimeMillis();
+                        // 安排下一次调用，使用提前刷新的时间计算
+                        long nextTime = calcNextFetchTime(continueFetchDTO.hiSpeedCache);
 
                         // 多线程执行更新任务
                         executorService.submit(new Runnable() {

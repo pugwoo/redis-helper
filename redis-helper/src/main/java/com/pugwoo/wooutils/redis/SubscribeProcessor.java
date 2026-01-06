@@ -234,7 +234,7 @@ public class SubscribeProcessor implements InitializingBean, ApplicationContextA
         // 关闭线程池
         subscribeThreadPool.shutdown();
         try {
-            if (!subscribeThreadPool.awaitTermination(30, TimeUnit.SECONDS)) {
+            if (!subscribeThreadPool.awaitTermination(10, TimeUnit.SECONDS)) {
                 subscribeThreadPool.shutdownNow();
             }
         } catch (InterruptedException e) {

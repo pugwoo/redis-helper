@@ -39,7 +39,17 @@ public @interface HiSpeedCache {
     int expireSecond() default 1;
 
     /**
-     * 当缓存接口被访问时，自动设定后续自动刷新缓存的时间。缓存将以expireSecond的频率持续更新continueFetchSecond秒。
+     * 提前fetch更新数据的时间比例，0.8表示刷新频率为expireSecond的80%。<br>
+     * 例如expireSecond是60，那么实际刷新频率就是每60*0.8=48秒刷新一次<br>
+     * 特别的，当preFetchRatio等于0时，表示不间断一直刷新。<br>
+     * 当数值小于0或大于1时，设置无效，重置为0.8
+     */
+    double preFetchRatio() default 0.8;
+
+    /**
+     * 当缓存接口被访问时，自动设定后续自动刷新缓存的时间。缓存将以expireSecond的频率持续更新continueFetchSecond秒。<br>
+     * continueFetchSecond必须大于0，否则不生效。一般来说，continueFetchSecond 大于 expireSecond。<br>
+     * 注意：后台刷新会在缓存过期前提前触发（约在expireSecond的80%时间点），以避免缓存过期瞬间请求穿透。<br>
      */
     int continueFetchSecond() default 0;
 
@@ -49,6 +59,13 @@ public @interface HiSpeedCache {
      * 如果设置为true时，即使相同方法参数调用卡主了，仍然会在线程池中发起，堵住整个线程池的风险更大些。
      */
     boolean concurrentFetch() default false;
+
+    /**
+     * 当N个相同key的请求同时进来时，第一个请求调用业务逻辑，其它请求最多等待cacheRebuildWaitMs毫秒复用第一个请求的结果，<br>
+     * 如果等待时间超过cacheRebuildWaitMs毫秒，则不再等待，直接调用业务逻辑。<br>
+     * 当值为0或小于0，则不等待，直接调用业务逻辑。
+     */
+    int cacheRebuildWaitMs() default 1000;
 
     /**
      * 是否json克隆返回数据，默认true<br>
