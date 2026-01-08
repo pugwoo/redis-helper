@@ -8,7 +8,7 @@ import java.lang.annotation.Target;
 /**
  * 本地高速缓存
  * 1. 可以不依赖于redis。
- * 2. 因为是高速缓存，超时时间很短，同时为了避免缓存穿透，因此一律缓存null值
+ * 2. 因为是高速缓存，超时时间一般可以设置很短，例如10秒到几分钟
  */
 @Target({ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
@@ -49,6 +49,7 @@ public @interface HiSpeedCache {
     /**
      * 当缓存接口被访问时，自动设定后续自动刷新缓存的时间。缓存将以expireSecond的频率持续更新continueFetchSecond秒。<br>
      * continueFetchSecond必须大于0，否则不生效。一般来说，continueFetchSecond 大于 expireSecond。<br>
+     * 如果后台刷新backend方法失败，内存缓存会仍然保留，直到超过continueFetchSecond为止。<br>
      * 注意：后台刷新会在缓存过期前提前触发（约在expireSecond的80%时间点），以避免缓存过期瞬间请求穿透。<br>
      */
     int continueFetchSecond() default 0;

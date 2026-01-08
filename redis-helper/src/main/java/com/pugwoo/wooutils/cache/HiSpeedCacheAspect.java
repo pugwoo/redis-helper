@@ -103,7 +103,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private static class ContinueFetchDTO {
         private volatile ProceedingJoinPoint pjp;
         private final HiSpeedCache hiSpeedCache;
-        private volatile long expireTimestamp; // 此次调用的过时时间（毫秒时间戳）
+        private volatile long expireTimestamp; // continueFetch刷新缓存的实际过时时间（毫秒时间戳）
 
         private ContinueFetchDTO(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache, long expireTimestamp) {
             this.pjp = pjp;
