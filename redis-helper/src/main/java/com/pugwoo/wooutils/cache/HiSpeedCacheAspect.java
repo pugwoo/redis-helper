@@ -307,6 +307,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
             if (continueFetch) {
                 ContinueFetchDTO continueFetchDTO = new ContinueFetchDTO(pjp, hiSpeedCache, expireTime, cacheNullValue);
+                // put到keyContinueFetchMap一定要放到addFetchToTimeLine前面，不然先放到fetchTime有可能马上就执行了，执行时就查询不到
                 keyContinueFetchMap.put(cacheKey, continueFetchDTO);
                 long nextFetchTime = calcNextFetchTime(hiSpeedCache);
                 addFetchToTimeLine(nextFetchTime, cacheKey);
