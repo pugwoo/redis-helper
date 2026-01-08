@@ -219,11 +219,13 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
                         // redis放的是有效数据
                         if (redisCache.getExpireTimestamp() == null || redisCache.getExpireTimestamp() > System.currentTimeMillis()) {
-                            if (cacheRedisData) { // 缓存到本地
+                            if (cacheRedisData) { // 缓存到本地，需要clone再返回
                                 putCacheData(cacheKey, result == null ? NULL_VALUE : result,
                                         cacheRedisDataMillisecond + System.currentTimeMillis());
+                                return processClone(hiSpeedCache, result, type);
+                            } else { // 不需要缓存到本地，那么不需要clone，因为每次都是从redis拿
+                                return result;
                             }
-                            return processClone(hiSpeedCache, result, type);
                         } // else 走直接调用
                         isRedisHaveData = true;
                         redisCachedValue = result;
