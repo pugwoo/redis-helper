@@ -104,13 +104,11 @@ public class HiSpeedCacheAspect implements InitializingBean {
         private volatile ProceedingJoinPoint pjp;
         private final HiSpeedCache hiSpeedCache;
         private volatile long expireTimestamp; // 此次调用的过时时间（毫秒时间戳）
-        private final boolean cacheNullValue;
 
-        private ContinueFetchDTO(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache, long expireTimestamp, boolean cacheNullValue) {
+        private ContinueFetchDTO(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache, long expireTimestamp) {
             this.pjp = pjp;
             this.hiSpeedCache = hiSpeedCache;
             this.expireTimestamp = expireTimestamp;
-            this.cacheNullValue = cacheNullValue;
         }
     }
 
@@ -306,7 +304,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
             }
 
             if (continueFetch) {
-                ContinueFetchDTO continueFetchDTO = new ContinueFetchDTO(pjp, hiSpeedCache, expireTime, cacheNullValue);
+                ContinueFetchDTO continueFetchDTO = new ContinueFetchDTO(pjp, hiSpeedCache, expireTime);
                 // put到keyContinueFetchMap一定要放到addFetchToTimeLine前面，不然先放到fetchTime有可能马上就执行了，执行时就查询不到
                 keyContinueFetchMap.put(cacheKey, continueFetchDTO);
                 long nextFetchTime = calcNextFetchTime(hiSpeedCache);
@@ -723,7 +721,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                                     }
 
                                     // 结果为null且不缓存null值
-                                    if (result == null && !continueFetchDTO.cacheNullValue) {
+                                    if (result == null && !continueFetchDTO.hiSpeedCache.cacheNullValue()) {
                                         return;
                                     }
                                     
