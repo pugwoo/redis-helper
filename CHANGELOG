@@ -1,4 +1,5 @@
 v1.7.2 - [enhance] 优化HiSpeedCache的性能，减少一次不必要的clone
+       - [enhance] 当HiSpeedCache useRedis且应用重启后，增加在用户访问时重启刷数任务
 
 2026年1月6日
 v1.7.1 - [add] 解决无缓存时，同一时刻大量请求可能导致的缓存击穿的问题
