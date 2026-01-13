@@ -103,14 +103,12 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private static class ContinueFetchDTO {
         private volatile ProceedingJoinPoint pjp;
         private final HiSpeedCache hiSpeedCache;
-        private volatile long expireTimestamp; // 此次调用的过时时间（毫秒时间戳）
-        private final boolean cacheNullValue;
+        private volatile long expireTimestamp; // continueFetch刷新缓存的实际过时时间（毫秒时间戳）
 
-        private ContinueFetchDTO(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache, long expireTimestamp, boolean cacheNullValue) {
+        private ContinueFetchDTO(ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache, long expireTimestamp) {
             this.pjp = pjp;
             this.hiSpeedCache = hiSpeedCache;
             this.expireTimestamp = expireTimestamp;
-            this.cacheNullValue = cacheNullValue;
         }
     }
 
@@ -207,6 +205,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 if (cacheRedisData) {
                     Object cacheData = getCacheData(cacheKey);
                     if (cacheData != null) {
+                        // redis缓存场景存在应用重启后虽然有redis有缓存，但是本地刷新任务已经丢失的情况
+                        putContinueFetch(cacheKey, pjp, hiSpeedCache);
                         return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, type);
                     }
                 }
@@ -219,11 +219,17 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
                         // redis放的是有效数据
                         if (redisCache.getExpireTimestamp() == null || redisCache.getExpireTimestamp() > System.currentTimeMillis()) {
-                            if (cacheRedisData) { // 缓存到本地
+                            if (cacheRedisData) { // 缓存到本地，需要clone再返回
                                 putCacheData(cacheKey, result == null ? NULL_VALUE : result,
                                         cacheRedisDataMillisecond + System.currentTimeMillis());
+                                // redis缓存场景存在应用重启后虽然有redis有缓存，但是本地刷新任务已经丢失的情况
+                                putContinueFetch(cacheKey, pjp, hiSpeedCache);
+                                return processClone(hiSpeedCache, result, type);
+                            } else { // 不需要缓存到本地，那么不需要clone，因为每次都是从redis拿
+                                // redis缓存场景存在应用重启后虽然有redis有缓存，但是本地刷新任务已经丢失的情况
+                                putContinueFetch(cacheKey, pjp, hiSpeedCache);
+                                return result;
                             }
-                            return processClone(hiSpeedCache, result, type);
                         } // else 走直接调用
                         isRedisHaveData = true;
                         redisCachedValue = result;
@@ -231,6 +237,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 } else { // redis有故障，尝试本地缓存
                     Object cacheData = getCacheData(cacheKey);
                     if (cacheData != null) {
+                        // redis缓存场景存在应用重启后虽然有redis有缓存，但是本地刷新任务已经丢失的情况
+                        putContinueFetch(cacheKey, pjp, hiSpeedCache);
                         return NULL_VALUE.equals(cacheData) ? null : processClone(hiSpeedCache, cacheData, type);
                     } // else 走直接调用
                 }
@@ -263,10 +271,8 @@ public class HiSpeedCacheAspect implements InitializingBean {
             }
         }
 
-        boolean continueFetch = hiSpeedCache.continueFetchSecond() > 0;
-        
         // 结果为null 不缓存 没有自动刷新缓存 则直接返回
-        if (ret == null && !cacheNullValue && !continueFetch) {
+        if (ret == null && !cacheNullValue && hiSpeedCache.continueFetchSecond() == 0) {
             return null;
         }
 
@@ -303,12 +309,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 }
             }
 
-            if (continueFetch) {
-                ContinueFetchDTO continueFetchDTO = new ContinueFetchDTO(pjp, hiSpeedCache, expireTime, cacheNullValue);
-                keyContinueFetchMap.put(cacheKey, continueFetchDTO);
-                long nextFetchTime = calcNextFetchTime(hiSpeedCache);
-                addFetchToTimeLine(nextFetchTime, cacheKey);
-            }
+            putContinueFetch(cacheKey, pjp, hiSpeedCache);
         }
 
         startThread(hiSpeedCache);
@@ -318,6 +319,24 @@ public class HiSpeedCacheAspect implements InitializingBean {
             return ret;
         } else {
             return processClone(hiSpeedCache, ret, type);
+        }
+    }
+
+    /**
+     * 将缓存key加入到continueFetch刷新队列。该方法被调用的频率很高，要特别优化性能。
+     */
+    private void putContinueFetch(String cacheKey, ProceedingJoinPoint pjp, HiSpeedCache hiSpeedCache) {
+        if (hiSpeedCache.continueFetchSecond() > 0 && keyContinueFetchMap.get(cacheKey) == null) {
+            long continueFetchExpireTime =
+                    Math.max(hiSpeedCache.expireSecond(), hiSpeedCache.continueFetchSecond()) * 1000L
+                    + System.currentTimeMillis();
+            ContinueFetchDTO continueFetchDTO = new ContinueFetchDTO(pjp, hiSpeedCache, continueFetchExpireTime);
+            // put到keyContinueFetchMap一定要放到addFetchToTimeLine前面，不然先放到fetchTime有可能马上就执行了，执行时就查询不到
+            ContinueFetchDTO old = keyContinueFetchMap.putIfAbsent(cacheKey, continueFetchDTO);
+            if (old == null) {
+                long nextFetchTime = calcNextFetchTime(hiSpeedCache);
+                addFetchToTimeLine(nextFetchTime, cacheKey);
+            }
         }
     }
 
@@ -720,7 +739,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
                                     }
 
                                     // 结果为null且不缓存null值
-                                    if (result == null && !continueFetchDTO.cacheNullValue) {
+                                    if (result == null && !continueFetchDTO.hiSpeedCache.cacheNullValue()) {
                                         return;
                                     }
                                     
