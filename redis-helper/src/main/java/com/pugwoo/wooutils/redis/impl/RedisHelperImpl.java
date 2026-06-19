@@ -3,6 +3,7 @@ package com.pugwoo.wooutils.redis.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.pugwoo.wooutils.redis.*;
 import com.pugwoo.wooutils.redis.exception.NoJedisConnectionException;
+import org.springframework.beans.factory.DisposableBean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.*;
@@ -17,7 +18,7 @@ import java.util.function.Function;
  * 大部分实现时间: 2016年11月2日 15:10:21
  * @author nick
  */
-public class RedisHelperImpl implements RedisHelper {
+public class RedisHelperImpl implements RedisHelper, DisposableBean {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedisHelperImpl.class);
 	
@@ -221,11 +222,10 @@ public class RedisHelperImpl implements RedisHelper {
 	}
 
 	@Override
-	protected void finalize() throws Throwable {
+	public void destroy() {
 		if(pool != null && !pool.isClosed()) {
 			pool.close();
 		}
-		super.finalize();
 	}
 	
 	@Override
