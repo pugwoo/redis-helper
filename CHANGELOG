@@ -1,4 +1,5 @@
 v1.7.3 - [deprecated] 移除jdk高版本废弃的finalize方法
+       - [enhance] 当接收redis消息阻塞类的接口占用jedis线程池达到90%时，禁止它们继续占用，以保证其它接口基本可用
 
 2026年1月13日
 v1.7.2 - [enhance] 优化HiSpeedCache的性能，减少一次不必要的clone

@@ -11,8 +11,10 @@ import redis.clients.jedis.*;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * 大部分实现时间: 2016年11月2日 15:10:21
@@ -21,6 +23,8 @@ import java.util.function.Function;
 public class RedisHelperImpl implements RedisHelper, DisposableBean {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedisHelperImpl.class);
+
+	private static final int MAX_BLOCKING_CONNECTION_PERCENT = 90;
 	
 	/**
 	 * 删除key-value的lua脚本 <br>
@@ -87,8 +91,68 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean {
 	 */
 	private volatile JedisPool pool;
 
+	/**当前被阻塞式Redis调用占用的连接数，用于避免receive/subscribe耗尽连接池*/
+	private final AtomicInteger blockingConnectionCount = new AtomicInteger(0);
+
     /**清理消息队列数据的现场，懒加载初始化*/
 	private volatile RedisMsgQueue.RecoverMsgTask recoverMsgTask;
+
+	private int getMaxBlockingConnectionCount() {
+		Integer max = maxConnection;
+		if(max == null || max <= 0) {
+			return 0;
+		}
+		return (int) ((long) max * MAX_BLOCKING_CONNECTION_PERCENT / 100);
+	}
+
+	private BlockingConnectionPermit acquireBlockingConnectionPermit(String operation, String target) {
+		int maxBlockingConnectionCount = getMaxBlockingConnectionCount();
+		while(true) {
+			int current = blockingConnectionCount.get();
+			if(current >= maxBlockingConnectionCount) {
+				String message = "reject redis blocking operation because blocking jedis connections reach limit, " +
+						"operation:" + operation + ", target:" + target + ", blockingConnectionCount:" + current +
+						", maxBlockingConnectionCount:" + maxBlockingConnectionCount + ", maxConnection:" + maxConnection +
+						", limitPercent:" + MAX_BLOCKING_CONNECTION_PERCENT + "%";
+				LOGGER.warn(message);
+				throw new NoJedisConnectionException(message);
+			}
+			if(blockingConnectionCount.compareAndSet(current, current + 1)) {
+				return new BlockingConnectionPermit(operation, target);
+			}
+		}
+	}
+
+	private <R> R executeWithBlockingConnectionPermit(String operation, String target, Supplier<R> supplier) {
+		try(BlockingConnectionPermit ignored = acquireBlockingConnectionPermit(operation, target)) {
+			return supplier.get();
+		}
+	}
+
+	private class BlockingConnectionPermit implements AutoCloseable {
+		private final String operation;
+		private final String target;
+		private boolean closed = false;
+
+		private BlockingConnectionPermit(String operation, String target) {
+			this.operation = operation;
+			this.target = target;
+		}
+
+		@Override
+		public void close() {
+			if(closed) {
+				return;
+			}
+			closed = true;
+			int count = blockingConnectionCount.decrementAndGet();
+			if(count < 0) {
+				blockingConnectionCount.set(0);
+				LOGGER.error("redis blocking connection count below zero, reset to 0, operation:{}, target:{}",
+						operation, target);
+			}
+		}
+	}
 	
 	private Jedis getJedisConnection() {
 		if(pool == null) {
@@ -602,14 +666,23 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean {
 
 	@Override
 	public RedisMsg receive(String topic) {
-		addTopicToTask(topic);
-		return RedisMsgQueue.receive(this, topic);
+		return executeWithBlockingConnectionPermit("receive", topic, () -> {
+			addTopicToTask(topic);
+			return RedisMsgQueue.receive(this, topic);
+		});
 	}
 
 	@Override
 	public RedisMsg receive(String topic, int waitTimeoutSec, Integer ackTimeoutSec) {
-		addTopicToTask(topic);
-		return RedisMsgQueue.receive(this, topic, waitTimeoutSec, ackTimeoutSec);
+		if(waitTimeoutSec == 0) {
+			addTopicToTask(topic);
+			return RedisMsgQueue.receive(this, topic, waitTimeoutSec, ackTimeoutSec);
+		}
+
+		return executeWithBlockingConnectionPermit("receive", topic, () -> {
+			addTopicToTask(topic);
+			return RedisMsgQueue.receive(this, topic, waitTimeoutSec, ackTimeoutSec);
+		});
 	}
 
 	@Override
@@ -639,7 +712,7 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean {
 
 	@Override
 	public String subscribe(String channel) {
-		return RedisPubSub.subscribe(this, channel);
+		return executeWithBlockingConnectionPermit("subscribe", channel, () -> RedisPubSub.subscribe(this, channel));
 	}
 
 	public String getHost() {
