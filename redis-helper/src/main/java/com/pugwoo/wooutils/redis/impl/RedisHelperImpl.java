@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.*;
 
+import java.io.Closeable;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +21,7 @@ import java.util.function.Supplier;
  * 大部分实现时间: 2016年11月2日 15:10:21
  * @author nick
  */
-public class RedisHelperImpl implements RedisHelper, DisposableBean {
+public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedisHelperImpl.class);
 
@@ -100,9 +101,11 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean {
 	private int getMaxBlockingConnectionCount() {
 		Integer max = maxConnection;
 		if(max == null || max <= 0) {
-			return 0;
+			// maxConnection未正确配置时不做限制，避免误伤receive/subscribe导致其完全不可用
+			return Integer.MAX_VALUE;
 		}
-		return (int) ((long) max * MAX_BLOCKING_CONNECTION_PERCENT / 100);
+		// 至少允许1个，避免连接池较小时阻塞型接口被完全禁用
+		return Math.max(1, (int) ((long) max * MAX_BLOCKING_CONNECTION_PERCENT / 100));
 	}
 
 	private BlockingConnectionPermit acquireBlockingConnectionPermit(String operation, String target) {
@@ -287,6 +290,13 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean {
 
 	@Override
 	public void destroy() {
+		close();
+	}
+
+	/**关闭连接池。Spring环境下由容器在销毁bean时通过DisposableBean自动调用；
+	 * 非Spring环境下需要使用方自行调用（或配合try-with-resources），以释放连接池资源*/
+	@Override
+	public void close() {
 		if(pool != null && !pool.isClosed()) {
 			pool.close();
 		}
