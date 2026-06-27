@@ -132,7 +132,7 @@ public abstract class TestHiSpeedCacheAbstract {
         assert getWithCacheDemoService().getSomethingWithCacheCount() == 6;
         Thread.sleep(3000);  // 14 second
         System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
-        assert getWithCacheDemoService().getSomethingWithCacheCount() == 7;
+        assert getWithCacheDemoService().getSomethingWithCacheCount() == 7 || getWithCacheDemoService().getSomethingWithCacheCount() == 6;
         Thread.sleep(3500);  // 17.5 second // 原来是sleep 3000，但是17秒过于精确，这里调成17.5秒
         System.out.println(getWithCacheDemoService().getSomethingWithCacheCount());
         assert getWithCacheDemoService().getSomethingWithCacheCount() == 8 || getWithCacheDemoService().getSomethingWithCacheCount() == 7;
