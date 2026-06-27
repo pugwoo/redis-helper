@@ -1,3 +1,4 @@
+2026年6月27日
 v1.7.3 - [deprecated] 移除jdk高版本废弃的finalize方法
        - [enhance] 当接收redis消息阻塞类的接口占用jedis线程池达到90%时，禁止它们继续占用，以保证其它接口基本可用
 
