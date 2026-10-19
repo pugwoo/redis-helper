@@ -1,5 +1,6 @@
 
 v1.7.4 - [fix] 修复redis分布式锁，当用到可重入锁 + 解锁时redis网络异常情况下，锁释放不正确的问题
+       - [enhance] RedisHelper.getString不再吞掉Redis连接/命令执行异常并返回null，改为抛出运行时异常（getObject同步受影响）
 
 2026年6月27日
 v1.7.3 - [deprecated] 移除jdk高版本废弃的finalize方法

@@ -392,21 +392,22 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 	
 	@Override
 	public String getString(String key) {
+		// 注意：这里不捕获异常。key不存在时Redis返回null，这与连接/命令执行异常必须区分开，
+		// 否则调用方（如分布式锁释放）会把网络异常误判为“key不存在”。异常由execute中的
+		// getJedisConnection以NoJedisConnectionException抛出，或以Jedis运行时异常从命令执行中抛出。
 		return execute(jedis -> {
-			try {
-				// 直接执行Redis命令: GET key
-				Object result = jedis.sendCommand(Protocol.Command.GET, key);
-				if (result == null) {
-					return null;
-				}
-				if (result instanceof byte[]) {
-					return new String((byte[]) result);
-				}
-				return result.toString();
-			} catch (Exception e) {
-				LOGGER.error("operate jedis error, key:{}", key, e);
+			if (jedis == null) { // host未配置时getJedisConnection返回null，避免以无意义的NPE暴露
+				throw new NoJedisConnectionException("redis is not configured, host is blank");
+			}
+			// 直接执行Redis命令: GET key
+			Object result = jedis.sendCommand(Protocol.Command.GET, key);
+			if (result == null) {
 				return null;
 			}
+			if (result instanceof byte[]) {
+				return new String((byte[]) result);
+			}
+			return result.toString();
 		});
 	}
 	

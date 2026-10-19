@@ -95,16 +95,18 @@ public interface RedisHelper {
 	long getExpireSecond(String key);
 	
 	/**
-	 * 获取字符串，不存在或redis连接不上返回null
+	 * 获取字符串
 	 * @param key
-	 * @return
+	 * @return key不存在时返回null；Redis连接不上或命令执行异常时抛出运行时异常
+	 *         （连接获取失败为NoJedisConnectionException），不再以null掩盖异常，
+	 *         以便调用方区分“key不存在”与“Redis异常”
 	 */
 	String getString(String key);
 	
 	/**
 	 * 获取对象，需要提供IRedisObjectConverter的实现对象
 	 * @param key redis key
-	 * @return
+	 * @return key不存在时返回null；Redis异常时同{@link #getString(String)}一样抛出运行时异常
 	 */
 	<T> T getObject(String key, Class<T> clazz);
 
@@ -115,6 +117,7 @@ public interface RedisHelper {
 	 *
 	 * @param key redis key
 	 * @param genericClasses 支持泛型类，但不支持嵌套泛型，嵌套泛型请使用getObject传入TypeReference的方式
+	 * @return key不存在时返回null；Redis异常时同{@link #getString(String)}一样抛出运行时异常
 	 */
 	<T> T getObject(String key, Class<T> clazz, Class<?>... genericClasses);
 
@@ -122,6 +125,7 @@ public interface RedisHelper {
 	 * 获取对象，需要提供
 	 * @param key redis key
 	 * @param typeReference 泛型，支持多个泛型和嵌套泛型
+	 * @return key不存在时返回null；Redis异常时同{@link #getString(String)}一样抛出运行时异常
 	 */
 	<T> T getObject(String key, TypeReference<T> typeReference);
 
