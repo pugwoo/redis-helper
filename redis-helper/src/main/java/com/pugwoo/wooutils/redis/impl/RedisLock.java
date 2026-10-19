@@ -562,12 +562,24 @@ public class RedisLock {
 			} else {
 				// 排它锁释放逻辑
 				if (value.equals(lockUuid)) {
-					redisHelper.remove(newKey, lockUuid); // 这个是原子操作
+					// remove是按key+uuid的原子删除，但它的false是吞掉Lua执行异常后返回的，
+					// 也可能是GET之后锁刚好过期/被替换而没有删到。两种情况都无法确认锁已释放，
+					// 不能像以前那样忽略返回值直接报成功：保守地返回false，可重入锁转入pending，
+					// 后续releaseLock/requireLock重试时会先GET确认锁的最终状态（已消失/已易主/仍是自己的）。
+					boolean removed = redisHelper.remove(newKey, lockUuid); // 这个是原子操作
+					if (!removed) {
+						LOGGER.error("releaseLock namespace:{}, key:{} fail, remove lock fail, lockUuid:{}",
+								namespace, key, lockUuid);
+						if (isReentrantLock) {
+							markReleasePending(newKey, lockUuid);
+						}
+						return false;
+					}
 					// 说明，此处不移除lockInfo，原因是它只是一个加锁信息，有过期时间，直接等待过期就可以了，也便于在锁是否的短时间内，根据其信息debug问题
 					if (isReentrantLock) {
 						clearReentrantState(newKey);
 					}
-					return true; // 就算lock uuid不匹配，也说明这个锁不是属于自己了，返回true表示解锁成功了
+					return true;
 				} else {
 					LOGGER.error("releaseLock namespace:{}, key:{} fail, uuid not match, redis:{}, given:{}",
 							namespace, key, value, lockUuid);

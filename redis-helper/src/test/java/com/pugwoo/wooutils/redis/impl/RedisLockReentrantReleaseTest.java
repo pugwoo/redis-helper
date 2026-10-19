@@ -68,6 +68,69 @@ public class RedisLockReentrantReleaseTest {
     }
 
     @Test
+    public void removeReturningFalseIsNotReportedAsSuccessAndCanBeRetried() {
+        FakeRedis redis = new FakeRedis();
+        RedisHelper helper = redis.helper();
+        String namespace = ns();
+        String key = "remove-false";
+
+        String uuid = RedisLock.requireLock(helper, namespace, key, 10, true);
+        // 模拟真实RedisHelperImpl.remove：GET已成功，但Lua删除执行异常被吞成false，而不是抛异常
+        redis.removeReturnsFalse = true;
+        assertTrue(!RedisLock.releaseLock(helper, namespace, key, uuid, true));
+        assertEquals(uuid, redis.data.get(redisKey(namespace, key)));
+
+        // pending不能被清掉：再次释放应真正删掉锁，而不是因本地无计数直接返回false
+        redis.removeReturnsFalse = false;
+        assertTrue(RedisLock.releaseLock(helper, namespace, key, uuid, true));
+        assertNull(redis.data.get(redisKey(namespace, key)));
+
+        String again = RedisLock.requireLock(helper, namespace, key, 10, true);
+        assertNotEquals(uuid, again);
+        assertEquals(again, redis.data.get(redisKey(namespace, key)));
+        assertTrue(RedisLock.releaseLock(helper, namespace, key, again, true));
+        assertNull(redis.data.get(redisKey(namespace, key)));
+    }
+
+    @Test
+    public void removeReturningFalseThenLockTakenByOtherNodeDoesNotBypass() throws Exception {
+        FakeRedis redis = new FakeRedis();
+        RedisHelper helper = redis.helper();
+        String namespace = ns();
+        String key = "remove-false-expire";
+
+        String uuid = RedisLock.requireLock(helper, namespace, key, 10, true);
+        redis.removeReturnsFalse = true;
+        assertTrue(!RedisLock.releaseLock(helper, namespace, key, uuid, true));
+        redis.removeReturnsFalse = false;
+
+        // 锁随后过期并被其他节点拿到：本线程不能凭pending中的旧uuid绕过Redis直接加锁
+        redis.data.remove(redisKey(namespace, key));
+        String otherUuid = requireOnOtherThread(helper, namespace, key);
+        assertNotEquals(uuid, otherUuid);
+
+        assertNull(RedisLock.requireLock(helper, namespace, key, 10, true));
+        assertEquals(otherUuid, redis.data.get(redisKey(namespace, key)));
+    }
+
+    @Test
+    public void removeReturningFalseForNonReentrantLockAlsoReturnsFalse() {
+        FakeRedis redis = new FakeRedis();
+        RedisHelper helper = redis.helper();
+        String namespace = ns();
+        String key = "remove-false-non-reentrant";
+
+        String uuid = RedisLock.requireLock(helper, namespace, key, 10, false);
+        redis.removeReturnsFalse = true;
+        assertTrue(!RedisLock.releaseLock(helper, namespace, key, uuid, false));
+        assertEquals(uuid, redis.data.get(redisKey(namespace, key)));
+
+        redis.removeReturnsFalse = false;
+        assertTrue(RedisLock.releaseLock(helper, namespace, key, uuid, false));
+        assertNull(redis.data.get(redisKey(namespace, key)));
+    }
+
+    @Test
     public void failedReleaseDoesNotBypassWhenLockExpiredAndTakenByOtherNode() throws Exception {
         FakeRedis redis = new FakeRedis();
         RedisHelper helper = redis.helper();
@@ -187,6 +250,8 @@ public class RedisLockReentrantReleaseTest {
         private final AtomicInteger setNxCount = new AtomicInteger();
         private final AtomicInteger getCount = new AtomicInteger();
         private volatile boolean failConnections;
+        /**模拟删除时Lua执行异常：真实remove实现会吞掉异常返回false，而不是抛异常*/
+        private volatile boolean removeReturnsFalse;
 
         private RedisHelper helper() {
             return (RedisHelper) Proxy.newProxyInstance(
@@ -261,6 +326,9 @@ public class RedisLockReentrantReleaseTest {
 
         private boolean remove(String key, String value) {
             synchronized (data) {
+                if (removeReturnsFalse) {
+                    return false;
+                }
                 if (failConnections) {
                     throw new NoJedisConnectionException("down");
                 }
