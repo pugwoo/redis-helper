@@ -20,10 +20,17 @@ public class RedisLock {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedisLock.class);
 
-	/**key -> keyCount*/
+	/**key -> keyCount。仅表示当前调用栈确实还持有锁*/
 	private static final ThreadLocal<Map<String, Integer>> lockCount = new ThreadLocal<>();
 	/**key -> keyUuid*/
 	private static final ThreadLocal<Map<String, String>> lockUuidTL = new ThreadLocal<>();
+	/**
+	 * 最外层释放没有写到 Redis 时，留下待删除的 uuid。
+	 * 有这条记录表示本地已经不再持有锁，下一次加锁不能当成重入。
+	 * 同一条线程之后的 releaseLock / requireLock 会先用这个 uuid 重试删除。
+	 * 不变量：同一个 key 不会同时出现在这里和 lockCount 里。
+	 */
+	private static final ThreadLocal<Map<String, String>> pendingRelease = new ThreadLocal<>();
 
 	/**共享锁标识后缀*/
 	private static final String SHARE_LOCK_SUFFIX = "[share]";
@@ -65,23 +72,9 @@ public class RedisLock {
 		String newKey = getKey(namespace, key);
 
 		if (isReentrantLock) {
-			if (lockCount.get() == null) {
-				lockCount.set(new HashMap<>());
-			}
-			if (lockUuidTL.get() == null) {
-				lockUuidTL.set(new HashMap<>());
-			}
-
-			Integer lc = lockCount.get().get(newKey);
-			String uuid = lockUuidTL.get().get(newKey);
-			if (lc != null && lc >= 1 && uuid != null && !uuid.isEmpty()) {
-				lockCount.get().put(newKey, lc + 1);
-				/*
-			     * 特别说明：可重入锁获得的锁不续期，理由：
-			     * 1) 一般可重入锁和第一次获得锁的动作在同一个代码业务内，时间较短，且锁续期需要额外的成本，故不进行
-			     * 2) 如果同一个代码业务内需要续期，可以调用renewalLock续期
-				 */
-				return uuid;
+			String reentrantUuid = tryReentrantAcquire(redisHelper, namespace, key, newKey);
+			if (reentrantUuid != null) {
+				return reentrantUuid;
 			}
 		}
 
@@ -90,8 +83,7 @@ public class RedisLock {
             boolean result = redisHelper.setStringIfNotExist(newKey, maxTransactionSeconds, uuid);
 			if (result) {
 				if (isReentrantLock) {
-					lockCount.get().put(newKey, 1);
-					lockUuidTL.get().put(newKey, uuid);
+					rememberHold(newKey, uuid);
 				}
 				recordLockInfo(redisHelper, newKey, maxTransactionSeconds);
 				return uuid;
@@ -139,19 +131,10 @@ public class RedisLock {
 
 		// 处理可重入锁逻辑
 		if (isReentrantLock) {
-			if (lockCount.get() == null) {
-				lockCount.set(new HashMap<>());
-			}
-			if (lockUuidTL.get() == null) {
-				lockUuidTL.set(new HashMap<>());
-			}
-
-			Integer lc = lockCount.get().get(newKey);
-			String uuid = lockUuidTL.get().get(newKey);
-			if (lc != null && lc >= 1 && uuid != null && !uuid.isEmpty()) {
-				lockCount.get().put(newKey, lc + 1);
+			String reentrantUuid = tryReentrantAcquire(redisHelper, namespace, key, newKey);
+			if (reentrantUuid != null) {
 				// 可重入锁获得的锁不续期，理由同requireLock
-				return uuid;
+				return reentrantUuid;
 			}
 		}
 
@@ -260,8 +243,7 @@ public class RedisLock {
 
 			if (result != null && result.equals(clientUuid)) {
 				if (isReentrantLock) {
-					lockCount.get().put(newKey, 1);
-					lockUuidTL.get().put(newKey, clientUuid);
+					rememberHold(newKey, clientUuid);
 				}
 				return clientUuid;
 			} else {
@@ -431,6 +413,96 @@ public class RedisLock {
 		}
 	}
 	
+	private static void ensureReentrantThreadLocals() {
+		if (lockCount.get() == null) {
+			lockCount.set(new HashMap<String, Integer>());
+		}
+		if (lockUuidTL.get() == null) {
+			lockUuidTL.set(new HashMap<String, String>());
+		}
+		if (pendingRelease.get() == null) {
+			pendingRelease.set(new HashMap<String, String>());
+		}
+	}
+
+	private static boolean hasPendingRelease(String newKey) {
+		Map<String, String> pending = pendingRelease.get();
+		if (pending == null) {
+			return false;
+		}
+		String uuid = pending.get(newKey);
+		return uuid != null && !uuid.isEmpty();
+	}
+
+	/**记录一次真正从 Redis 拿到的锁，并清掉同一把 key 上失败释放留下的 pending。*/
+	private static void rememberHold(String newKey, String uuid) {
+		ensureReentrantThreadLocals();
+		lockCount.get().put(newKey, 1);
+		lockUuidTL.get().put(newKey, uuid);
+		pendingRelease.get().remove(newKey);
+	}
+
+	/**释放已经确认完成，或锁已经不属于当前线程。本地持锁和待重试记录都去掉。*/
+	private static void clearReentrantState(String newKey) {
+		if (lockCount.get() != null) {
+			lockCount.get().remove(newKey);
+		}
+		if (lockUuidTL.get() != null) {
+			lockUuidTL.get().remove(newKey);
+		}
+		if (pendingRelease.get() != null) {
+			pendingRelease.get().remove(newKey);
+		}
+	}
+
+	/**
+	 * 最外层释放没有写到 Redis。去掉持锁计数，避免被下一次加锁当成重入；
+	 * 保留 uuid，让后续 releaseLock / requireLock 能重试删除。
+	 */
+	private static void markReleasePending(String newKey, String lockUuid) {
+		ensureReentrantThreadLocals();
+		lockCount.get().remove(newKey);
+		String heldUuid = lockUuidTL.get().remove(newKey);
+		String uuid = (lockUuid != null && !lockUuid.isEmpty()) ? lockUuid : heldUuid;
+		if (uuid != null && !uuid.isEmpty()) {
+			pendingRelease.get().put(newKey, uuid);
+		}
+	}
+
+	/**
+	 * 当前调用栈确实还持有锁时，按重入直接返回原 uuid，不访问 Redis，也不续期。
+	 * 如果上一轮最外层释放失败，则先重试删除 Redis 上的旧锁，再返回 null，让调用方重新竞争。
+	 *
+	 * @return 重入成功时返回原 uuid；需要走 Redis 加锁时返回 null
+	 */
+	private static String tryReentrantAcquire(RedisHelper redisHelper, String namespace,
+			String key, String newKey) {
+		ensureReentrantThreadLocals();
+		if (hasPendingRelease(newKey)) {
+			String pendingUuid = pendingRelease.get().get(newKey);
+			LOGGER.warn("skip reentrant acquire because previous release failed, namespace:{}, key:{}",
+					namespace, key);
+			// 业务上一次已经结束，这里不是重入。先尽力删掉残留锁，再重新竞争。
+			releaseLock(redisHelper, namespace, key, pendingUuid, true);
+			if (hasPendingRelease(newKey)) {
+				return null;
+			}
+		}
+
+		Integer lc = lockCount.get().get(newKey);
+		String uuid = lockUuidTL.get().get(newKey);
+		if (lc != null && lc >= 1 && uuid != null && !uuid.isEmpty()) {
+			lockCount.get().put(newKey, lc + 1);
+			/*
+			 * 特别说明：可重入锁获得的锁不续期，理由：
+			 * 1) 一般可重入锁和第一次获得锁的动作在同一个代码业务内，时间较短，且锁续期需要额外的成本，故不进行
+			 * 2) 如果同一个代码业务内需要续期，可以调用renewalLock续期
+			 */
+			return uuid;
+		}
+		return null;
+	}
+
 	/**
 	 * 如果事务已经完成，则归还锁。
 	 * 支持排它锁和共享锁的释放。
@@ -449,21 +521,19 @@ public class RedisLock {
 		String newKey = getKey(namespace, key);
 
 		if (isReentrantLock) {
-			if (lockCount.get() == null) {
-				lockCount.set(new HashMap<>());
-			}
-			if (lockUuidTL.get() == null) {
-				lockUuidTL.set(new HashMap<>());
-			}
-
+			ensureReentrantThreadLocals();
 			Integer lc = lockCount.get().get(newKey);
-			if (lc != null && lc > 1) {
+			// 还有外层持锁时，只减本地计数。上一轮释放失败留下的 pending 不是持锁，不能走这里。
+			if (lc != null && lc > 1 && !hasPendingRelease(newKey)) {
 				lockCount.get().put(newKey, lc - 1);
 				return true;
-			} else if (lc == null || lc <= 0) {
+			} else if ((lc == null || lc <= 0) && !hasPendingRelease(newKey)) {
 				return false; // 说明没有加锁，或者已经解锁了
 			}
-			// 剩下的就是 lc == 1
+			// 剩下的是 lc == 1，或者最外层释放失败后等待重试
+			if (lockUuid == null || lockUuid.isEmpty()) {
+				lockUuid = pendingRelease.get().get(newKey);
+			}
 		}
 
 		try {
@@ -471,8 +541,7 @@ public class RedisLock {
 			if(value == null) {
 				LOGGER.warn("releaseLock namespace:{}, key:{}, lock not exist", namespace, key);
 				if (isReentrantLock) {
-					lockCount.get().remove(newKey);
-					lockUuidTL.get().remove(newKey);
+					clearReentrantState(newKey);
 				}
 				return true;
 			}
@@ -481,9 +550,13 @@ public class RedisLock {
 			if (value.endsWith(SHARE_LOCK_SUFFIX)) {
 				// 共享锁释放逻辑
 				boolean result = releaseShareLock(redisHelper, newKey, lockUuid);
-				if (result && isReentrantLock) {
-					lockCount.get().remove(newKey);
-					lockUuidTL.get().remove(newKey);
+				if (isReentrantLock) {
+					if (result) {
+						clearReentrantState(newKey);
+					} else {
+						// 没删掉 Redis 上的锁，不能继续留着持锁计数，否则下一次会被当成重入
+						markReleasePending(newKey, lockUuid);
+					}
 				}
 				return result;
 			} else {
@@ -492,22 +565,24 @@ public class RedisLock {
 					redisHelper.remove(newKey, lockUuid); // 这个是原子操作
 					// 说明，此处不移除lockInfo，原因是它只是一个加锁信息，有过期时间，直接等待过期就可以了，也便于在锁是否的短时间内，根据其信息debug问题
 					if (isReentrantLock) {
-						lockCount.get().remove(newKey);
-						lockUuidTL.get().remove(newKey);
+						clearReentrantState(newKey);
 					}
 					return true; // 就算lock uuid不匹配，也说明这个锁不是属于自己了，返回true表示解锁成功了
 				} else {
 					LOGGER.error("releaseLock namespace:{}, key:{} fail, uuid not match, redis:{}, given:{}",
 							namespace, key, value, lockUuid);
 					if (isReentrantLock) { // 这个时候锁已经不是自己的了，所以要清理掉
-						lockCount.get().remove(newKey);
-						lockUuidTL.get().remove(newKey);
+						clearReentrantState(newKey);
 					}
 					return false;
 				}
 			}
 		} catch (Exception e) {
-			// 这里可能由于网络原因，redis锁还在，所以不清理lockCount，以允许再次releaseLock
+			// Redis 锁可能还在，但本地持锁计数不能留着：同一条线程下一次 requireLock
+			// 会把计数当成重入直接放行。改记 pending，后续 release/require 会重试删除。
+			if (isReentrantLock) {
+				markReleasePending(newKey, lockUuid);
+			}
 			LOGGER.error("releaseLock error, namespace:{}, key:{}", namespace, key, e);
 			return false;
 		}
