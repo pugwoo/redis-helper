@@ -98,6 +98,9 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
     /**清理消息队列数据的现场，懒加载初始化*/
 	private volatile RedisMsgQueue.RecoverMsgTask recoverMsgTask;
 
+	/**是否已经关闭，关闭后不再懒启动清理线程*/
+	private volatile boolean closed = false;
+
 	private int getMaxBlockingConnectionCount() {
 		Integer max = maxConnection;
 		if(max == null || max <= 0) {
@@ -293,10 +296,23 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 		close();
 	}
 
-	/**关闭连接池。Spring环境下由容器在销毁bean时通过DisposableBean自动调用；
-	 * 非Spring环境下需要使用方自行调用（或配合try-with-resources），以释放连接池资源*/
+	/**关闭连接池并停止消息队列清理线程。Spring环境下由容器在销毁bean时通过DisposableBean自动调用；
+	 * 非Spring环境下需要使用方自行调用（或配合try-with-resources），以释放连接池资源。
+	 * 幂等：重复调用无副作用。注意先停清理线程再关连接池，避免清理线程在连接池关闭后
+	 * 周期性重试并刷错误日志。*/
 	@Override
 	public void close() {
+		closed = true;
+
+		RedisMsgQueue.RecoverMsgTask task;
+		synchronized (RedisMsgQueue.RecoverMsgTask.class) {
+			task = recoverMsgTask;
+			recoverMsgTask = null;
+		}
+		if(task != null) {
+			task.shutdown();
+		}
+
 		if(pool != null && !pool.isClosed()) {
 			pool.close();
 		}
@@ -638,9 +654,12 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 	}
 
 	private void addTopicToTask(String topic) {
+		if(closed) { // 已关闭的实例不再启动清理线程，后续Redis调用会因连接池关闭而失败，属调用方误用
+			return;
+		}
 		if(recoverMsgTask == null) {
 			synchronized (RedisMsgQueue.RecoverMsgTask.class) {
-				if(recoverMsgTask == null) {
+				if(recoverMsgTask == null && !closed) {
 					recoverMsgTask = new RedisMsgQueue.RecoverMsgTask(this);
 					recoverMsgTask.setName("RedisMsgQueue.RecoverMsgTask");
 					recoverMsgTask.start();
@@ -648,7 +667,10 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 			}
 		}
 
-		recoverMsgTask.addTopic(topic);
+		RedisMsgQueue.RecoverMsgTask task = recoverMsgTask;
+		if(task != null && task.isRunning()) {
+			task.addTopic(topic);
+		}
 	}
 
 	@Override
@@ -724,6 +746,14 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 	@Override
 	public String subscribe(String channel) {
 		return executeWithBlockingConnectionPermit("subscribe", channel, () -> RedisPubSub.subscribe(this, channel));
+	}
+
+	@Override
+	public String subscribe(String channel, int timeoutSec) {
+		if(timeoutSec <= 0) {
+			return subscribe(channel);
+		}
+		return executeWithBlockingConnectionPermit("subscribe", channel, () -> RedisPubSub.subscribe(this, channel, timeoutSec));
 	}
 
 	public String getHost() {

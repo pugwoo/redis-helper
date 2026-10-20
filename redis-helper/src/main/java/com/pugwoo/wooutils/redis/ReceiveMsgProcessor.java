@@ -3,6 +3,7 @@ package com.pugwoo.wooutils.redis;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -11,6 +12,7 @@ import org.springframework.context.ApplicationContextAware;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -19,9 +21,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 
  * @author pugwoo
  */
-public class ReceiveMsgProcessor implements InitializingBean, ApplicationContextAware {
+public class ReceiveMsgProcessor implements InitializingBean, ApplicationContextAware, DisposableBean, AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ReceiveMsgProcessor.class);
+
+    /**
+     * 单次阻塞等待消息的最长秒数。使用有限超时轮询而不是永久阻塞：
+     * 线程对 interrupt 不敏感地阻塞在 Jedis socket 读取上（BRPOPLPUSH 的 socket 读超时被 Jedis 设为无限），
+     * 只有让阻塞调用本身按有限超时返回，消费循环才有机会检查 isShuttingDown 并退出。
+     * 取值 5 秒意味着关闭时空闲消费者最多 5 秒内退出，正常情况下阻塞命令的额外开销可以忽略。
+     */
+    static final int BLOCK_POLL_TIMEOUT_SEC = 5;
 
     @Autowired
     private RedisHelper redisHelper;
@@ -52,6 +62,12 @@ public class ReceiveMsgProcessor implements InitializingBean, ApplicationContext
      * 是否正在关闭
      */
     private volatile boolean isShuttingDown = false;
+
+    /**
+     * shutdown() 是否已经执行过。Spring 可能同时通过 DisposableBean.destroy() 和
+     * 为 @Bean 推断的 shutdown 销毁方法回调本类，两条路径都必须幂等。
+     */
+    private final AtomicBoolean shutdownInitiated = new AtomicBoolean(false);
 
     public ReceiveMsgProcessor() {
         // 创建线程池
@@ -86,6 +102,10 @@ public class ReceiveMsgProcessor implements InitializingBean, ApplicationContext
 
     @Override
     public void afterPropertiesSet() throws Exception {
+        if (isShuttingDown) {
+            LOGGER.warn("ReceiveMsgProcessor is already shutdown, will not start any consumer");
+            return;
+        }
         if (redisHelper == null) {
             LOGGER.error("redisHelper is null, ReceiveMsgProcessor will not start any consumer");
             return;
@@ -162,8 +182,9 @@ public class ReceiveMsgProcessor implements InitializingBean, ApplicationContext
 
                 while (!isShuttingDown) {
                     try {
-                        // 阻塞等待消息，永久等待
-                        RedisMsg msg = redisHelper.receive(topic, -1,
+                        // 有限超时阻塞等待消息，超时返回 null 后循环会重新检查 isShuttingDown，
+                        // 这样 shutdown() 才能让空闲消费者在数秒内退出（永久阻塞时 interrupt 打不断 socket 读）
+                        RedisMsg msg = redisHelper.receive(topic, BLOCK_POLL_TIMEOUT_SEC,
                                 ackTimeoutSec > 0 ? ackTimeoutSec : null);
 
                         if (msg == null) {
@@ -200,7 +221,9 @@ public class ReceiveMsgProcessor implements InitializingBean, ApplicationContext
                             }
                         }
 
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
+                        // 捕获 Throwable 而不是 Exception：像 NoSuchMethodError 这类 Error（如 Jedis 版本不兼容）
+                        // 若穿透出去会让本消费线程静默死亡且再也不消费，必须兜住记日志并重试
                         if (!isShuttingDown) {
                             LOGGER.error("Error in consumer thread: topic={}, thread={}, error={}",
                                     topic, threadName, e.getMessage(), e);
@@ -234,10 +257,29 @@ public class ReceiveMsgProcessor implements InitializingBean, ApplicationContext
         return parameterTypes.length == 1 && parameterTypes[0] == RedisMsg.class;
     }
 
+    @Override
+    public void destroy() {
+        shutdown();
+    }
+
+    @Override
+    public void close() {
+        shutdown();
+    }
+
     /**
-     * 优雅关闭
+     * 优雅关闭。幂等：重复调用直接返回。
+     * <p>
+     * 退出原理：先置 isShuttingDown，再 interrupt 消费者线程（能打断异常后的 5 秒休眠等可中断点），
+     * 空闲消费者阻塞在有限超时的 receive() 上，最多 {@link #BLOCK_POLL_TIMEOUT_SEC} 秒后返回并检查到
+     * 关闭标志退出；正在处理消息的消费者会在处理并 ack/nack 完成后退出，不会被强行打断业务处理。
+     * 等待上限取阻塞轮询时间的 2 倍多一点，超时后未退出的线程（例如业务方法长时间不返回）只能
+     * 再次尝试 interrupt 并记录警告，无法安全强杀。
      */
     public void shutdown() {
+        if (!shutdownInitiated.compareAndSet(false, true)) {
+            return;
+        }
         LOGGER.info("Shutting down ReceiveMsgProcessor...");
         isShuttingDown = true;
 
@@ -245,12 +287,17 @@ public class ReceiveMsgProcessor implements InitializingBean, ApplicationContext
         for (Future<?> future : consumerFutures) {
             future.cancel(true);
         }
+        consumerFutures.clear();
 
         // 关闭线程池
         receiveMsgThreadPool.shutdown();
         try {
-            if (!receiveMsgThreadPool.awaitTermination(10, TimeUnit.SECONDS)) {
+            if (!receiveMsgThreadPool.awaitTermination(BLOCK_POLL_TIMEOUT_SEC * 2L + 5, TimeUnit.SECONDS)) {
                 receiveMsgThreadPool.shutdownNow();
+                if (!receiveMsgThreadPool.awaitTermination(5, TimeUnit.SECONDS)) {
+                    LOGGER.warn("ReceiveMsgProcessor consumer threads did not stop within timeout, "
+                            + "they will exit after current blocking receive or message processing finishes");
+                }
             }
         } catch (InterruptedException e) {
             receiveMsgThreadPool.shutdownNow();
@@ -258,6 +305,11 @@ public class ReceiveMsgProcessor implements InitializingBean, ApplicationContext
         }
 
         LOGGER.info("ReceiveMsgProcessor shutdown complete");
+    }
+
+    /**是否已经开始关闭，供测试和状态检查使用*/
+    public boolean isShuttingDown() {
+        return isShuttingDown;
     }
 
     /**

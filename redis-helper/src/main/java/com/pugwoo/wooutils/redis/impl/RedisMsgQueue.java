@@ -482,8 +482,56 @@ public class RedisMsgQueue {
         private RedisHelper redisHelper;
         private Map<String, String> topics = new ConcurrentHashMap<>(); // 存放需要更新的主题
 
+        /**任务是否继续运行，shutdown() 后置为 false，各循环据此退出*/
+        private volatile boolean running = true;
+
+        /**锁续期子线程，shutdown() 时需要一并停止*/
+        private volatile Thread renewalThread;
+
         public RecoverMsgTask(RedisHelper redisHelper) {
             this.redisHelper = redisHelper;
+        }
+
+        public boolean isRunning() {
+            return running;
+        }
+
+        /**
+         * 停止清理任务（包括锁续期子线程）并等待其退出。幂等：重复调用直接返回。
+         * <p>
+         * 退出原理：置 running 为 false 并 interrupt 两个线程，各循环在每轮迭代和每次休眠后
+         * 都会检查运行标志；正在执行的单次 Redis 调用（有连接/读超时上限）结束后即退出。
+         * 等待上限内仍未退出时只记录警告，不强行杀线程。
+         */
+        public void shutdown() {
+            if (!running) {
+                return;
+            }
+            running = false;
+
+            Thread renewal = renewalThread;
+            if (renewal != null && renewal != Thread.currentThread()) {
+                renewal.interrupt();
+            }
+            if (Thread.currentThread() != this) {
+                this.interrupt();
+                try {
+                    this.join(10000);
+                    if (this.isAlive()) {
+                        LOGGER.warn("RecoverMsgTask did not stop within 10 seconds, "
+                                + "it will exit after current redis operation finishes");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            if (renewal != null && renewal != Thread.currentThread() && Thread.currentThread() != this) {
+                try {
+                    renewal.join(3000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         }
 
         public void addTopic(String topic) {
@@ -548,7 +596,13 @@ public class RedisMsgQueue {
             if(!waitToClear.isEmpty()) { // 清理，需要再检查一遍是否消费时间确实为null
                 try {
                     Thread.sleep(10000); // 这个10秒钟还关乎消费时间为null的消息的延迟处理
-                } catch (InterruptedException e) { // ignore
+                } catch (InterruptedException e) { // 关闭时被打断则不再继续清理
+                    if (!running) {
+                        return true;
+                    }
+                }
+                if (!running) {
+                    return true;
                 }
 
                 for(Map.Entry<String, List<String>> entry : waitToClear.entrySet()) {
@@ -567,9 +621,9 @@ public class RedisMsgQueue {
 
         private static final String LOCK_KEY = "_RedisMsgQueueRecoverMsgTaskLock_";
 
-        /** 一直尝试拿锁，直到拿到为止 */
+        /** 一直尝试拿锁，直到拿到为止；任务关闭时返回null */
         private String getLock() {
-            while(true) {
+            while(running) {
                 try {
                     String lockUuid = redisHelper.requireLock(LOCK_KEY, "-", 30, true);
                     if(lockUuid == null) { // 没有拿到锁，等待30秒重试
@@ -578,16 +632,22 @@ public class RedisMsgQueue {
                         return lockUuid;
                     }
                 } catch (Throwable e) {
-                    LOGGER.error("get lock error, namespace:{} key:-", LOCK_KEY, e);
+                    if (running) {
+                        LOGGER.error("get lock error, namespace:{} key:-", LOCK_KEY, e);
+                    }
                     doSleep(30000);
                 }
             }
+            return null;
         }
 
         private void doSleep(long ms) {
+            if (!running) {
+                return;
+            }
             try {
                 Thread.sleep(ms);
-            } catch (InterruptedException e) { // ignore
+            } catch (InterruptedException e) { // 关闭时被打断，外层循环会检查 running 后退出，这里不恢复中断标志以免后续休眠立即抛错
             }
         }
 
@@ -596,11 +656,18 @@ public class RedisMsgQueue {
             final AtomicReference<String> lockUuidRef = new AtomicReference<>();
 
             Thread thread = new Thread(() -> {
-                while(true) { // 一直循环不会退出，每5秒续30秒，也即一共有5次续期机会
+                while(running) { // 每5秒续30秒，也即一共有5次续期机会；任务关闭时退出
                     if(lockUuidRef.get() != null) {
-                        boolean result = redisHelper.renewalLock(LOCK_KEY, "-",
-                                lockUuidRef.get(),30);
-                        if (!result) { // 如果刷新锁失败，则废弃该锁
+                        try {
+                            boolean result = redisHelper.renewalLock(LOCK_KEY, "-",
+                                    lockUuidRef.get(),30);
+                            if (!result) { // 如果刷新锁失败，则废弃该锁
+                                lockUuidRef.set(null);
+                            }
+                        } catch (Throwable e) {
+                            if (running) {
+                                LOGGER.error("renewal lock error, namespace:{} key:-", LOCK_KEY, e);
+                            }
                             lockUuidRef.set(null);
                         }
                     }
@@ -608,24 +675,40 @@ public class RedisMsgQueue {
                 }
             });
             thread.setName("RedisMsgQueue.RecoverMsgRenewalLockTask");
+            renewalThread = thread;
             thread.start();
 
-            while(true) { // 一直循环不会退出
-                String lockUuid = getLock();
-                lockUuidRef.set(lockUuid);
-
-                while(true) { // 一直循环不会退出，除非锁不见了
-                    try {
-                        boolean hasSleep = doClean();
-                        if(!hasSleep) { // 如果刚清理完，还没睡眠，则睡眠一下，避免过于频繁清理，消息恢复的延迟级别是10-30秒
-                            doSleep(10000);
-                        }
-                    } catch (Exception e) {
-                        LOGGER.error("do clean task fail", e);
-                    }
-                    if(lockUuidRef.get() == null) { // 锁丢失了就重新拿锁
+            try {
+                while(running) {
+                    String lockUuid = getLock();
+                    if (!running) {
                         break;
                     }
+                    lockUuidRef.set(lockUuid);
+
+                    while(running) { // 除非锁不见了或任务关闭，否则一直清理
+                        try {
+                            boolean hasSleep = doClean();
+                            if(!hasSleep) { // 如果刚清理完，还没睡眠，则睡眠一下，避免过于频繁清理，消息恢复的延迟级别是10-30秒
+                                doSleep(10000);
+                            }
+                        } catch (Exception e) {
+                            if (running) {
+                                LOGGER.error("do clean task fail", e);
+                            }
+                        }
+                        if(lockUuidRef.get() == null) { // 锁丢失了就重新拿锁
+                            break;
+                        }
+                    }
+                    lockUuidRef.set(null);
+                }
+            } finally {
+                // 主循环退出时确保续期子线程也退出
+                running = false;
+                Thread renewal = renewalThread;
+                if (renewal != null) {
+                    renewal.interrupt();
                 }
             }
         }

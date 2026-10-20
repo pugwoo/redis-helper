@@ -11,6 +11,7 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.mvel2.MVEL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
@@ -21,11 +22,13 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @EnableAspectJAutoProxy
 @Aspect
 @Order(2000)
-public class RedisSyncAspect implements InitializingBean {
+public class RedisSyncAspect implements InitializingBean, DisposableBean, AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RedisSyncAspect.class);
 
@@ -41,11 +44,20 @@ public class RedisSyncAspect implements InitializingBean {
 
     private static final Map<String, HeartBeatInfo> heartBeatKeys = new ConcurrentHashMap<>(); // 心跳超时秒数
 
-    private static volatile HeartbeatRenewalTask heartbeatRenewalTask = null;
+    /**
+     * 心跳续约线程由本实例持有（不再用 static 字段）。旧实现每次 afterPropertiesSet 都新建一条
+     * static 线程并覆盖字段引用，旧线程永不停止、还持有旧实例及其 RedisHelper 无法被 GC；
+     * 实例持有后，destroy()/shutdown() 就能精确停止自己启动的这一条。多上下文并存时，
+     * 每条存活实例的心跳线程都会续约静态 heartBeatKeys 中的全部锁，任一实例销毁只停自己的线程。
+     */
+    private volatile HeartbeatRenewalTask heartbeatRenewalTask = null;
 
     private final long startTimestamp = System.currentTimeMillis();
 
-    private static final ThreadPoolExecutor redisSyncHeartbeatRenewalThreadPool =
+    /**shutdown() 是否已经执行过，保证 destroy()/close()/shutdown() 多路回调幂等*/
+    private final AtomicBoolean shutdownInitiated = new AtomicBoolean(false);
+
+    private final ThreadPoolExecutor redisSyncHeartbeatRenewalThreadPool =
             InnerCommonUtils.createThreadPool(1, 10000, 1,
                     "Redis-Sync-Heartbeat-Renewal-Thread-Pool", Thread.MAX_PRIORITY);
 
@@ -54,13 +66,69 @@ public class RedisSyncAspect implements InitializingBean {
         long cost = System.currentTimeMillis() - startTimestamp;
         if (redisHelper == null) {
             LOGGER.error("redisHelper is null, RedisSyncAspect will pass through all method call");
+        } else if (shutdownInitiated.get()) {
+            LOGGER.warn("RedisSyncAspect is already shutdown, heartbeat renewal thread will not start");
         } else {
-            heartbeatRenewalTask = new HeartbeatRenewalTask();
-            heartbeatRenewalTask.setName("RedisSyncAspect-heartbeat-renewal-thread");
-            heartbeatRenewalTask.setPriority(Thread.MAX_PRIORITY);
-            heartbeatRenewalTask.start();
+            synchronized (this) {
+                if (heartbeatRenewalTask != null && heartbeatRenewalTask.isAlive()) {
+                    // 已经有一条心跳线程在运行，重复初始化不再新建，避免线程累积
+                    return;
+                }
+                heartbeatRenewalTask = new HeartbeatRenewalTask();
+                heartbeatRenewalTask.setName("RedisSyncAspect-heartbeat-renewal-thread");
+                heartbeatRenewalTask.setPriority(Thread.MAX_PRIORITY);
+                heartbeatRenewalTask.start();
+            }
             LOGGER.info("@Synchronized init success, cost:{} ms.", cost);
         }
+    }
+
+    @Override
+    public void destroy() {
+        shutdown();
+    }
+
+    @Override
+    public void close() {
+        shutdown();
+    }
+
+    /**
+     * 停止本实例的心跳续约线程和续约线程池。幂等：重复调用直接返回。
+     * 业务线程在 shutdown 后若再加锁成功，putToHeatBeat 仍会往静态 heartBeatKeys 放入记录，
+     * 但已关闭实例的心跳线程不再续约，该锁会按 heartbeatExpireSecond 自然过期——关闭后继续
+     * 使用已销毁的 Spring bean 本就属误用，这里只保证线程停得掉、不报错刷屏。
+     */
+    public void shutdown() {
+        if (!shutdownInitiated.compareAndSet(false, true)) {
+            return;
+        }
+        HeartbeatRenewalTask task = heartbeatRenewalTask;
+        heartbeatRenewalTask = null;
+        if (task != null) {
+            task.stopTask();
+            if (Thread.currentThread() != task) {
+                task.interrupt();
+                try {
+                    task.join(5000);
+                    if (task.isAlive()) {
+                        LOGGER.warn("RedisSyncAspect heartbeat renewal thread did not stop within 5 seconds, "
+                                + "it will exit after current renewal round finishes");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        redisSyncHeartbeatRenewalThreadPool.shutdownNow();
+        try {
+            if (!redisSyncHeartbeatRenewalThreadPool.awaitTermination(5, TimeUnit.SECONDS)) {
+                LOGGER.warn("RedisSyncAspect heartbeat renewal thread pool did not terminate within 5 seconds");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        LOGGER.info("RedisSyncAspect shutdown complete");
     }
 
     /**
@@ -377,6 +445,18 @@ public class RedisSyncAspect implements InitializingBean {
     }
 
     private class HeartbeatRenewalTask extends Thread {
+
+        /**是否继续运行，stopTask() 后置 false，循环据此退出*/
+        private volatile boolean running = true;
+
+        void stopTask() {
+            running = false;
+        }
+
+        boolean isRunning() {
+            return running;
+        }
+
         @Override
         public void run() {
             if (redisHelper == null) {
@@ -384,33 +464,46 @@ public class RedisSyncAspect implements InitializingBean {
                 return;
             }
 
-            while (true) { // 一直循环，不会退出
+            while (running) {
                 long start = System.currentTimeMillis();
 
-                List<Future<?>> futures = new ArrayList<>();
-                for (String key : heartBeatKeys.keySet()) {
-                    Future<Boolean> future = redisSyncHeartbeatRenewalThreadPool.submit(() -> {
-                        HeartBeatInfo heartBeatInfo = heartBeatKeys.get(key);
-                        // 相当于double-check
-                        if (heartBeatInfo != null) {
-                            try {
-                                redisHelper.renewalLock(heartBeatInfo.namespace, heartBeatInfo.key,
-                                        heartBeatInfo.lockUuid,
-                                        heartBeatInfo.heartbeatExpireSecond);
-                            } catch (Throwable e) {
-                                LOGGER.error("renewalLock throw exception, namespace:{}, key:{}, lockUuid:{}, heartbeatExpireSecond:{}",
-                                        heartBeatInfo.namespace, heartBeatInfo.key, heartBeatInfo.lockUuid, heartBeatInfo.heartbeatExpireSecond, e);
-                            }
+                try {
+                    List<Future<?>> futures = new ArrayList<>();
+                    for (String key : heartBeatKeys.keySet()) {
+                        if (!running) {
+                            break;
                         }
-                        return true; // 无论如何返回true
-                    });
-                    futures.add(future);
+                        Future<Boolean> future = redisSyncHeartbeatRenewalThreadPool.submit(() -> {
+                            HeartBeatInfo heartBeatInfo = heartBeatKeys.get(key);
+                            // 相当于double-check
+                            if (heartBeatInfo != null) {
+                                try {
+                                    redisHelper.renewalLock(heartBeatInfo.namespace, heartBeatInfo.key,
+                                            heartBeatInfo.lockUuid,
+                                            heartBeatInfo.heartbeatExpireSecond);
+                                } catch (Throwable e) {
+                                    LOGGER.error("renewalLock throw exception, namespace:{}, key:{}, lockUuid:{}, heartbeatExpireSecond:{}",
+                                            heartBeatInfo.namespace, heartBeatInfo.key, heartBeatInfo.lockUuid, heartBeatInfo.heartbeatExpireSecond, e);
+                                }
+                            }
+                            return true; // 无论如何返回true
+                        });
+                        futures.add(future);
+                    }
+                    // 等待本批次的更新结束
+                    if (!futures.isEmpty()) {
+                        InnerCommonUtils.waitAllFuturesDone(futures);
+                    }
+                } catch (Throwable e) {
+                    // 保证心跳线程存活，例如关闭时线程池已 shutdownNow 导致 submit 被拒绝；
+                    // 关闭中（running 已为 false）则不再打日志
+                    if (running) {
+                        LOGGER.error("heartbeat renewal round fail", e);
+                    }
                 }
-                // 等待本批次的更新结束
-                InnerCommonUtils.waitAllFuturesDone(futures);
 
                 long cost = System.currentTimeMillis() - start;
-                if (cost > 3000) { // 增大线程池
+                if (running && cost > 3000) { // 增大线程池
                     int oldCorePoolSize = redisSyncHeartbeatRenewalThreadPool.getCorePoolSize();
                     int newCorePoolSize = oldCorePoolSize == 1 ? 10 : oldCorePoolSize * 2;
                     if (newCorePoolSize > 100) {
@@ -426,10 +519,13 @@ public class RedisSyncAspect implements InitializingBean {
                 if (sleep < 0) {
                     sleep = 0;
                 }
-                if (sleep > 0) {
+                if (sleep > 0 && running) {
                     try {
                         Thread.sleep(sleep);
-                    } catch (InterruptedException ignored) {
+                    } catch (InterruptedException e) {
+                        if (!running) {
+                            break;
+                        }
                     }
                 }
             }

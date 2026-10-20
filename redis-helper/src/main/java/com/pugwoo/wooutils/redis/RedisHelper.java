@@ -404,4 +404,20 @@ public interface RedisHelper {
 	 */
 	String subscribe(String channel);
 
+	/**
+	 * 订阅指定的 channel，最多阻塞 timeoutSec 秒接收一条消息后返回
+	 * <p>
+	 * 与 {@link #subscribe(String)} 的区别是等待有上限：超时未收到消息返回 null，
+	 * 调用方可以在循环中借此机会检查退出标志（例如容器关闭），避免线程永久阻塞在
+	 * socket 读取上、连 interrupt 都无法唤醒。本默认实现退化为永久阻塞版本，
+	 * 自定义实现应覆盖本方法才能获得可退出的轮询语义；{@code RedisHelperImpl} 已提供实现。
+	 *
+	 * @param channel 要订阅的频道
+	 * @param timeoutSec 最长等待秒数，小于等于0时等价于 {@link #subscribe(String)} 永久等待
+	 * @return 接收到的消息内容，超时或发生异常返回null
+	 */
+	default String subscribe(String channel, int timeoutSec) {
+		return subscribe(channel);
+	}
+
 }

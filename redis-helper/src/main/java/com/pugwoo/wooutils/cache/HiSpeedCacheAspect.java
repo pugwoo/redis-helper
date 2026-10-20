@@ -12,6 +12,7 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.mvel2.MVEL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
@@ -35,12 +36,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @EnableAspectJAutoProxy
 @Aspect
 @Order(1000)
-public class HiSpeedCacheAspect implements InitializingBean {
+public class HiSpeedCacheAspect implements InitializingBean, DisposableBean, AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HiSpeedCacheAspect.class);
 
@@ -63,6 +65,71 @@ public class HiSpeedCacheAspect implements InitializingBean {
         } else {
             LOGGER.info("@HiSpeedCache init success with redisHelper, cost:{} ms.", cost);
         }
+    }
+
+    @Override
+    public void destroy() {
+        shutdown();
+    }
+
+    @Override
+    public void close() {
+        shutdown();
+    }
+
+    /**
+     * 停止清理/持续更新后台线程并关闭更新线程池。幂等：重复调用直接返回。
+     * 后台线程的休眠只有 0.1~1 秒且都检查 isShuttingDown，interrupt 后即可退出；
+     * executorService 中正在执行的业务刷新任务会被 interrupt，是否响应取决于业务方法本身，
+     * 等待超时后只记录警告，不强行杀线程。
+     */
+    public void shutdown() {
+        if (!shutdownInitiated.compareAndSet(false, true)) {
+            return;
+        }
+        isShuttingDown = true;
+
+        Thread clean = cleanThread;
+        cleanThread = null;
+        Thread update = continueThread;
+        continueThread = null;
+        if (clean != null) {
+            clean.interrupt();
+        }
+        if (update != null) {
+            update.interrupt();
+        }
+        joinQuietly(clean, "HiSpeedCache-clean-thread");
+        joinQuietly(update, "HiSpeedCache-update-thread");
+
+        executorService.shutdownNow();
+        try {
+            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                LOGGER.warn("HiSpeedCache update executor did not terminate within 5 seconds");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        LOGGER.info("HiSpeedCacheAspect shutdown complete");
+    }
+
+    private void joinQuietly(Thread thread, String threadName) {
+        if (thread == null || thread == Thread.currentThread()) {
+            return;
+        }
+        try {
+            thread.join(3000);
+            if (thread.isAlive()) {
+                LOGGER.warn("{} did not stop within 3 seconds, it will exit after current work finishes", threadName);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**是否已经开始关闭，供测试和状态检查使用*/
+    public boolean isShuttingDown() {
+        return isShuttingDown;
     }
 
     // 多线程执行更新数据任务，默认十个线程
@@ -123,6 +190,12 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     private volatile CleanExpireDataTask cleanThread = null;   // 不需要多线程
     private volatile ContinueUpdateTask continueThread = null; // 不需要多线程
+
+    /**是否正在关闭，置 true 后后台线程退出且不再启动新线程*/
+    private volatile boolean isShuttingDown = false;
+
+    /**shutdown() 是否已经执行过，保证 destroy()/close()/shutdown() 多路回调幂等*/
+    private final AtomicBoolean shutdownInitiated = new AtomicBoolean(false);
 
     private final Map<String, Boolean> concurrentFetchControl = new ConcurrentHashMap<>(); // 控制fetch的并发执行
     
@@ -351,9 +424,12 @@ public class HiSpeedCacheAspect implements InitializingBean {
 
     /**启用清理线程和更新线程*/
     private void startThread(HiSpeedCache hiSpeedCache) {
+        if (isShuttingDown) {
+            return;
+        }
         if (cleanThread == null) {
             synchronized (CleanExpireDataTask.class) {
-                if (cleanThread == null) {
+                if (cleanThread == null && !isShuttingDown) {
                     cleanThread = new CleanExpireDataTask();
                     cleanThread.setName("HiSpeedCache-clean-thread");
                     cleanThread.start();
@@ -364,7 +440,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
         if (hiSpeedCache.continueFetchSecond() != 0) {
             if (continueThread == null) {
                 synchronized (ContinueUpdateTask.class) {
-                    if (continueThread == null) {
+                    if (continueThread == null && !isShuttingDown) {
                         continueThread = new ContinueUpdateTask();
                         continueThread.setName("HiSpeedCache-update-thread");
                         continueThread.start();
@@ -789,7 +865,7 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private class CleanExpireDataTask extends Thread {
         @Override
         public void run() {
-            while (true) { // 一直循环，不会退出
+            while (!isShuttingDown) {
                 try {
                     cleanExpireData();
                 } catch (Throwable e) { // 保证线程存活
@@ -797,7 +873,10 @@ public class HiSpeedCacheAspect implements InitializingBean {
                 }
                 try {
                     Thread.sleep(1000);
-                } catch (InterruptedException ignored) {
+                } catch (InterruptedException e) {
+                    if (isShuttingDown) {
+                        break;
+                    }
                 }
             }
         }
@@ -806,15 +885,20 @@ public class HiSpeedCacheAspect implements InitializingBean {
     private class ContinueUpdateTask extends Thread {
         @Override
         public void run() {
-            while (true) { // 一直循环，不会退出
+            while (!isShuttingDown) {
                 try {
                     refreshResult();
-                } catch (Throwable e) { // 保证线程存活
-                    LOGGER.error("refresh result error", e);
+                } catch (Throwable e) { // 保证线程存活，关闭时线程池已关可能抛 RejectedExecutionException，不再打日志
+                    if (!isShuttingDown) {
+                        LOGGER.error("refresh result error", e);
+                    }
                 }
                 try {
                     Thread.sleep(100);
-                } catch (InterruptedException ignored) {
+                } catch (InterruptedException e) {
+                    if (isShuttingDown) {
+                        break;
+                    }
                 }
             }
         }
