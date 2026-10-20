@@ -84,7 +84,7 @@ public class RedisMsgQueue {
                 success = false;
                 LOGGER.error("send msg:{}, content:{} fail, redis result[0] != 1", uuid, msg);
             }
-            if(!(result.get(0)!=null && (result.get(0) instanceof Long) && ((Long)result.get(0)) > 0L)) {
+            if(!(result.get(1)!=null && (result.get(1) instanceof Long) && ((Long)result.get(1)) > 0L)) {
                 success = false;
                 LOGGER.error("send msg:{}, content:{} fail, redis result[1] < 1", uuid, msg);
             }
