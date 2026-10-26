@@ -3,6 +3,7 @@ package com.pugwoo.wooutils.redis;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -11,6 +12,7 @@ import org.springframework.context.ApplicationContextAware;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -19,9 +21,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 
  * @author pugwoo
  */
-public class SubscribeProcessor implements InitializingBean, ApplicationContextAware {
+public class SubscribeProcessor implements InitializingBean, ApplicationContextAware, DisposableBean, AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(SubscribeProcessor.class);
+
+    /**
+     * 单次订阅阻塞等待消息的最长秒数。使用有限超时轮询而不是永久阻塞：
+     * 线程对 interrupt 不敏感地阻塞在 Jedis socket 读取上（SUBSCRIBE 的 socket 读超时被 Jedis 设为无限），
+     * 只有让阻塞调用本身按有限超时返回，订阅循环才有机会检查 isShuttingDown 并退出。
+     * 取值 5 秒意味着关闭时空闲订阅者最多 5 秒内退出。
+     */
+    static final int BLOCK_POLL_TIMEOUT_SEC = 5;
 
     @Autowired
     private RedisHelper redisHelper;
@@ -52,6 +62,12 @@ public class SubscribeProcessor implements InitializingBean, ApplicationContextA
      * 是否正在关闭
      */
     private volatile boolean isShuttingDown = false;
+
+    /**
+     * shutdown() 是否已经执行过。Spring 可能同时通过 DisposableBean.destroy() 和
+     * 为 @Bean 推断的 shutdown 销毁方法回调本类，两条路径都必须幂等。
+     */
+    private final AtomicBoolean shutdownInitiated = new AtomicBoolean(false);
 
     public SubscribeProcessor() {
         // 创建线程池
@@ -86,6 +102,10 @@ public class SubscribeProcessor implements InitializingBean, ApplicationContextA
 
     @Override
     public void afterPropertiesSet() throws Exception {
+        if (isShuttingDown) {
+            LOGGER.warn("SubscribeProcessor is already shutdown, will not start any subscriber");
+            return;
+        }
         if (redisHelper == null) {
             LOGGER.error("redisHelper is null, SubscribeProcessor will not start any subscriber");
             return;
@@ -161,8 +181,9 @@ public class SubscribeProcessor implements InitializingBean, ApplicationContextA
 
                 while (!isShuttingDown) {
                     try {
-                        // 阻塞等待消息
-                        String message = redisHelper.subscribe(channel);
+                        // 有限超时阻塞等待消息，超时返回 null 后循环会重新检查 isShuttingDown，
+                        // 这样 shutdown() 才能让空闲订阅者在数秒内退出（永久阻塞时 interrupt 打不断 socket 读）
+                        String message = redisHelper.subscribe(channel, BLOCK_POLL_TIMEOUT_SEC);
 
                         if (message == null) {
                             // 没有接收到消息，继续等待
@@ -185,7 +206,9 @@ public class SubscribeProcessor implements InitializingBean, ApplicationContextA
                                     channel, message, e.getMessage(), e);
                         }
 
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
+                        // 捕获 Throwable 而不是 Exception：像 NoSuchMethodError 这类 Error（如 Jedis 版本不兼容）
+                        // 若穿透出去会让本订阅线程静默死亡且再也不订阅，必须兜住记日志并重试
                         if (!isShuttingDown) {
                             LOGGER.error("Error in subscriber thread: channel={}, thread={}, error={}",
                                     channel, threadName, e.getMessage(), e);
@@ -219,10 +242,29 @@ public class SubscribeProcessor implements InitializingBean, ApplicationContextA
         return parameterTypes.length == 1 && parameterTypes[0] == String.class;
     }
 
+    @Override
+    public void destroy() {
+        shutdown();
+    }
+
+    @Override
+    public void close() {
+        shutdown();
+    }
+
     /**
-     * 优雅关闭
+     * 优雅关闭。幂等：重复调用直接返回。
+     * <p>
+     * 退出原理：先置 isShuttingDown，再 interrupt 订阅者线程（能打断异常后的 5 秒休眠等可中断点），
+     * 空闲订阅者阻塞在有限超时的 subscribe() 上，最多 {@link #BLOCK_POLL_TIMEOUT_SEC} 秒后返回并检查到
+     * 关闭标志退出；正在处理消息的订阅者会在处理完成后退出，不会被强行打断业务处理。
+     * 等待上限取阻塞轮询时间的 2 倍多一点，超时后未退出的线程只能再次尝试 interrupt 并记录警告，
+     * 无法安全强杀。
      */
     public void shutdown() {
+        if (!shutdownInitiated.compareAndSet(false, true)) {
+            return;
+        }
         LOGGER.info("Shutting down SubscribeProcessor...");
         isShuttingDown = true;
 
@@ -230,12 +272,17 @@ public class SubscribeProcessor implements InitializingBean, ApplicationContextA
         for (Future<?> future : subscriberFutures) {
             future.cancel(true);
         }
+        subscriberFutures.clear();
 
         // 关闭线程池
         subscribeThreadPool.shutdown();
         try {
-            if (!subscribeThreadPool.awaitTermination(10, TimeUnit.SECONDS)) {
+            if (!subscribeThreadPool.awaitTermination(BLOCK_POLL_TIMEOUT_SEC * 2L + 5, TimeUnit.SECONDS)) {
                 subscribeThreadPool.shutdownNow();
+                if (!subscribeThreadPool.awaitTermination(5, TimeUnit.SECONDS)) {
+                    LOGGER.warn("SubscribeProcessor subscriber threads did not stop within timeout, "
+                            + "they will exit after current blocking subscribe or message processing finishes");
+                }
             }
         } catch (InterruptedException e) {
             subscribeThreadPool.shutdownNow();
@@ -243,6 +290,11 @@ public class SubscribeProcessor implements InitializingBean, ApplicationContextA
         }
 
         LOGGER.info("SubscribeProcessor shutdown complete");
+    }
+
+    /**是否已经开始关闭，供测试和状态检查使用*/
+    public boolean isShuttingDown() {
+        return isShuttingDown;
     }
 
     /**

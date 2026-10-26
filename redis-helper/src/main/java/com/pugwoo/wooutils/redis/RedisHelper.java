@@ -95,16 +95,18 @@ public interface RedisHelper {
 	long getExpireSecond(String key);
 	
 	/**
-	 * 获取字符串，不存在或redis连接不上返回null
+	 * 获取字符串
 	 * @param key
-	 * @return
+	 * @return key不存在时返回null；Redis连接不上或命令执行异常时抛出运行时异常
+	 *         （连接获取失败为NoJedisConnectionException），不再以null掩盖异常，
+	 *         以便调用方区分“key不存在”与“Redis异常”
 	 */
 	String getString(String key);
 	
 	/**
 	 * 获取对象，需要提供IRedisObjectConverter的实现对象
 	 * @param key redis key
-	 * @return
+	 * @return key不存在时返回null；Redis异常时同{@link #getString(String)}一样抛出运行时异常
 	 */
 	<T> T getObject(String key, Class<T> clazz);
 
@@ -115,6 +117,7 @@ public interface RedisHelper {
 	 *
 	 * @param key redis key
 	 * @param genericClasses 支持泛型类，但不支持嵌套泛型，嵌套泛型请使用getObject传入TypeReference的方式
+	 * @return key不存在时返回null；Redis异常时同{@link #getString(String)}一样抛出运行时异常
 	 */
 	<T> T getObject(String key, Class<T> clazz, Class<?>... genericClasses);
 
@@ -122,6 +125,7 @@ public interface RedisHelper {
 	 * 获取对象，需要提供
 	 * @param key redis key
 	 * @param typeReference 泛型，支持多个泛型和嵌套泛型
+	 * @return key不存在时返回null；Redis异常时同{@link #getString(String)}一样抛出运行时异常
 	 */
 	<T> T getObject(String key, TypeReference<T> typeReference);
 
@@ -399,5 +403,21 @@ public interface RedisHelper {
 	 * @return 接收到的消息内容，如果发生异常返回null
 	 */
 	String subscribe(String channel);
+
+	/**
+	 * 订阅指定的 channel，最多阻塞 timeoutSec 秒接收一条消息后返回
+	 * <p>
+	 * 与 {@link #subscribe(String)} 的区别是等待有上限：超时未收到消息返回 null，
+	 * 调用方可以在循环中借此机会检查退出标志（例如容器关闭），避免线程永久阻塞在
+	 * socket 读取上、连 interrupt 都无法唤醒。本默认实现退化为永久阻塞版本，
+	 * 自定义实现应覆盖本方法才能获得可退出的轮询语义；{@code RedisHelperImpl} 已提供实现。
+	 *
+	 * @param channel 要订阅的频道
+	 * @param timeoutSec 最长等待秒数，小于等于0时等价于 {@link #subscribe(String)} 永久等待
+	 * @return 接收到的消息内容，超时或发生异常返回null
+	 */
+	default String subscribe(String channel, int timeoutSec) {
+		return subscribe(channel);
+	}
 
 }

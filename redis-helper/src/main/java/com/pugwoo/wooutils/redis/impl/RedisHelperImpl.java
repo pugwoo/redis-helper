@@ -98,6 +98,9 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
     /**清理消息队列数据的现场，懒加载初始化*/
 	private volatile RedisMsgQueue.RecoverMsgTask recoverMsgTask;
 
+	/**是否已经关闭，关闭后不再懒启动清理线程*/
+	private volatile boolean closed = false;
+
 	private int getMaxBlockingConnectionCount() {
 		Integer max = maxConnection;
 		if(max == null || max <= 0) {
@@ -293,10 +296,23 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 		close();
 	}
 
-	/**关闭连接池。Spring环境下由容器在销毁bean时通过DisposableBean自动调用；
-	 * 非Spring环境下需要使用方自行调用（或配合try-with-resources），以释放连接池资源*/
+	/**关闭连接池并停止消息队列清理线程。Spring环境下由容器在销毁bean时通过DisposableBean自动调用；
+	 * 非Spring环境下需要使用方自行调用（或配合try-with-resources），以释放连接池资源。
+	 * 幂等：重复调用无副作用。注意先停清理线程再关连接池，避免清理线程在连接池关闭后
+	 * 周期性重试并刷错误日志。*/
 	@Override
 	public void close() {
+		closed = true;
+
+		RedisMsgQueue.RecoverMsgTask task;
+		synchronized (RedisMsgQueue.RecoverMsgTask.class) {
+			task = recoverMsgTask;
+			recoverMsgTask = null;
+		}
+		if(task != null) {
+			task.shutdown();
+		}
+
 		if(pool != null && !pool.isClosed()) {
 			pool.close();
 		}
@@ -392,21 +408,22 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 	
 	@Override
 	public String getString(String key) {
+		// 注意：这里不捕获异常。key不存在时Redis返回null，这与连接/命令执行异常必须区分开，
+		// 否则调用方（如分布式锁释放）会把网络异常误判为“key不存在”。异常由execute中的
+		// getJedisConnection以NoJedisConnectionException抛出，或以Jedis运行时异常从命令执行中抛出。
 		return execute(jedis -> {
-			try {
-				// 直接执行Redis命令: GET key
-				Object result = jedis.sendCommand(Protocol.Command.GET, key);
-				if (result == null) {
-					return null;
-				}
-				if (result instanceof byte[]) {
-					return new String((byte[]) result);
-				}
-				return result.toString();
-			} catch (Exception e) {
-				LOGGER.error("operate jedis error, key:{}", key, e);
+			if (jedis == null) { // host未配置时getJedisConnection返回null，避免以无意义的NPE暴露
+				throw new NoJedisConnectionException("redis is not configured, host is blank");
+			}
+			// 直接执行Redis命令: GET key
+			Object result = jedis.sendCommand(Protocol.Command.GET, key);
+			if (result == null) {
 				return null;
 			}
+			if (result instanceof byte[]) {
+				return new String((byte[]) result);
+			}
+			return result.toString();
 		});
 	}
 	
@@ -637,9 +654,12 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 	}
 
 	private void addTopicToTask(String topic) {
+		if(closed) { // 已关闭的实例不再启动清理线程，后续Redis调用会因连接池关闭而失败，属调用方误用
+			return;
+		}
 		if(recoverMsgTask == null) {
 			synchronized (RedisMsgQueue.RecoverMsgTask.class) {
-				if(recoverMsgTask == null) {
+				if(recoverMsgTask == null && !closed) {
 					recoverMsgTask = new RedisMsgQueue.RecoverMsgTask(this);
 					recoverMsgTask.setName("RedisMsgQueue.RecoverMsgTask");
 					recoverMsgTask.start();
@@ -647,7 +667,10 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 			}
 		}
 
-		recoverMsgTask.addTopic(topic);
+		RedisMsgQueue.RecoverMsgTask task = recoverMsgTask;
+		if(task != null && task.isRunning()) {
+			task.addTopic(topic);
+		}
 	}
 
 	@Override
@@ -723,6 +746,14 @@ public class RedisHelperImpl implements RedisHelper, DisposableBean, Closeable {
 	@Override
 	public String subscribe(String channel) {
 		return executeWithBlockingConnectionPermit("subscribe", channel, () -> RedisPubSub.subscribe(this, channel));
+	}
+
+	@Override
+	public String subscribe(String channel, int timeoutSec) {
+		if(timeoutSec <= 0) {
+			return subscribe(channel);
+		}
+		return executeWithBlockingConnectionPermit("subscribe", channel, () -> RedisPubSub.subscribe(this, channel, timeoutSec));
 	}
 
 	public String getHost() {
